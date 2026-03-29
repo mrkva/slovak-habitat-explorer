@@ -10,20 +10,10 @@
         html, body { height: 100%; width: 100%; }
         #map { height: 100%; width: 100%; }
 
-        /* Better layer control on mobile */
-        .leaflet-control-layers {
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-        .leaflet-control-layers-expanded {
-            padding: 8px 12px;
-        }
-        .leaflet-control-layers label {
-            font-size: 14px;
-            padding: 2px 0;
-        }
+        .leaflet-control-layers { max-height: 80vh; overflow-y: auto; }
+        .leaflet-control-layers-expanded { padding: 8px 12px; }
+        .leaflet-control-layers label { font-size: 14px; padding: 2px 0; }
 
-        /* Opacity slider panel */
         #opacity-control {
             position: absolute;
             bottom: 30px;
@@ -36,23 +26,30 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             font-size: 13px;
         }
-        #opacity-control label {
-            display: block;
-            margin-bottom: 4px;
-            font-weight: 600;
-        }
-        #opacity-control input[type="range"] {
-            width: 140px;
-        }
+        #opacity-control label { display: block; margin-bottom: 4px; font-weight: 600; }
+        #opacity-control input[type="range"] { width: 140px; }
 
-        /* Feature info popup */
-        .forest-info { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; max-width: 280px; }
-        .forest-info h3 { margin: 0 0 6px; font-size: 15px; }
-        .forest-info table { border-collapse: collapse; width: 100%; }
-        .forest-info td { padding: 2px 6px; border-bottom: 1px solid #eee; }
-        .forest-info td:first-child { font-weight: 600; white-space: nowrap; color: #555; }
-        .forest-info .loading { color: #888; font-style: italic; }
-        .forest-info .error { color: #c00; }
+        /* Popup styling */
+        .fi { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; max-width: 280px; line-height: 1.4; }
+        .fi h3 { margin: 0 0 8px; font-size: 16px; color: #1a5c1a; }
+        .fi .section { margin-bottom: 10px; }
+        .fi .section-title { font-weight: 700; font-size: 12px; text-transform: uppercase; color: #888; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .fi .val { font-size: 14px; margin-bottom: 2px; }
+        .fi .val b { color: #333; }
+        .fi .category-tag {
+            display: inline-block; padding: 2px 8px; border-radius: 4px;
+            font-size: 12px; font-weight: 600; color: white;
+        }
+        .fi .cat-H { background: #d97706; }
+        .fi .cat-O { background: #059669; }
+        .fi .cat-U { background: #7c3aed; }
+        .fi .species-bar { display: flex; height: 14px; border-radius: 3px; overflow: hidden; margin: 4px 0; }
+        .fi .species-item { margin-bottom: 2px; }
+        .fi .loading { color: #888; font-style: italic; }
+        .fi .error { color: #666; }
+        .fi .debug { margin-top: 8px; padding-top: 6px; border-top: 1px solid #eee; }
+        .fi .debug summary { font-size: 11px; color: #aaa; cursor: pointer; }
+        .fi .debug pre { font-size: 10px; max-height: 200px; overflow: auto; white-space: pre-wrap; word-break: break-all; color: #666; }
     </style>
 </head>
 <body>
@@ -64,97 +61,62 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Center on Slovakia
         var map = L.map('map').setView([48.7, 19.5], 8);
 
         // Base layers
         var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
+            attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>',
             maxZoom: 19
         }).addTo(map);
 
         var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: '&copy; Esri',
-            maxZoom: 19
+            attribution: '&copy; Esri', maxZoom: 19
         });
 
-        var baseLayers = {
-            "OpenStreetMap": osm,
-            "Satellite": satellite
-        };
-
-        // WMS overlay layers from NLC (Narodne lesnicke centrum)
+        // WMS overlays
         var wmsAttr = '&copy; <a href="https://web.nlcsk.org">NLC Zvolen</a>';
-
-        var jprl = L.tileLayer.wms("https://gis.nlcsk.org/arcgis/services/MPRV/JPRL_ZBGIS/MapServer/WMSServer", {
-            layers: '0',
-            format: 'image/png',
-            transparent: true,
-            opacity: 0.7,
-            version: '1.1.1',
-            attribution: wmsAttr
-        }).addTo(map);
-
-        var drevinoveZlozenie = L.tileLayer.wms("https://gis.nlcsk.org/arcgis/services/Inspire/DrevinoveZlozenie/MapServer/WmsServer", {
-            layers: '0',
-            format: 'image/png',
-            transparent: true,
-            opacity: 0.7,
-            attribution: wmsAttr
-        });
-
-        var lesneTypy = L.tileLayer.wms("https://gis.nlcsk.org/arcgis/services/Inspire/LesneTypy/MapServer/WMSServer", {
-            layers: '0',
-            format: 'image/png',
-            transparent: true,
-            opacity: 0.7,
-            attribution: wmsAttr
-        });
-
-        var lesneCesty = L.tileLayer.wms("https://gis.nlcsk.org/arcgis/services/Inspire/LesneCesty/MapServer/WMSServer", {
-            layers: '0',
-            format: 'image/png',
-            transparent: true,
-            opacity: 0.7,
-            attribution: wmsAttr
-        });
-
-        var lhc = L.tileLayer.wms("https://gis.nlcsk.org/arcgis/services/Inspire/LHC/MapServer/WMSServer", {
-            layers: '0',
-            format: 'image/png',
-            transparent: true,
-            opacity: 0.7,
-            attribution: wmsAttr
-        });
-
-        var lesneOblasti = L.tileLayer.wms("https://gis.nlcsk.org/arcgis/services/Inspire/LesneOblasti/MapServer/WMSServer", {
-            layers: '0',
-            format: 'image/png',
-            transparent: true,
-            opacity: 0.7,
-            attribution: wmsAttr
-        });
-
-        var overlays = {
-            "Forest stands (JPRL)": jprl,
-            "Tree species composition": drevinoveZlozenie,
-            "Forest types": lesneTypy,
-            "Forest roads": lesneCesty,
-            "Forest management units": lhc,
-            "Forest regions": lesneOblasti
+        var wmsOpts = function(extra) {
+            return Object.assign({ format: 'image/png', transparent: true, opacity: 0.7, attribution: wmsAttr }, extra || {});
         };
 
-        // All WMS layers for opacity control
+        var jprl = L.tileLayer.wms("https://gis.nlcsk.org/arcgis/services/MPRV/JPRL_ZBGIS/MapServer/WMSServer",
+            wmsOpts({ layers: '0', version: '1.1.1' })).addTo(map);
+
+        var drevinoveZlozenie = L.tileLayer.wms("https://gis.nlcsk.org/arcgis/services/Inspire/DrevinoveZlozenie/MapServer/WmsServer",
+            wmsOpts({ layers: '0' }));
+
+        var lesneTypy = L.tileLayer.wms("https://gis.nlcsk.org/arcgis/services/Inspire/LesneTypy/MapServer/WMSServer",
+            wmsOpts({ layers: '0' }));
+
+        var lesneCesty = L.tileLayer.wms("https://gis.nlcsk.org/arcgis/services/Inspire/LesneCesty/MapServer/WMSServer",
+            wmsOpts({ layers: '0' }));
+
+        var lhc = L.tileLayer.wms("https://gis.nlcsk.org/arcgis/services/Inspire/LHC/MapServer/WMSServer",
+            wmsOpts({ layers: '0' }));
+
+        var lesneOblasti = L.tileLayer.wms("https://gis.nlcsk.org/arcgis/services/Inspire/LesneOblasti/MapServer/WMSServer",
+            wmsOpts({ layers: '0' }));
+
         var allWmsLayers = [jprl, drevinoveZlozenie, lesneTypy, lesneCesty, lhc, lesneOblasti];
 
-        L.control.layers(baseLayers, overlays, { collapsed: true }).addTo(map);
+        L.control.layers(
+            { "OpenStreetMap": osm, "Satellite": satellite },
+            {
+                "Forest stands (JPRL)": jprl,
+                "Tree species composition": drevinoveZlozenie,
+                "Forest types": lesneTypy,
+                "Forest roads": lesneCesty,
+                "Forest management units": lhc,
+                "Forest regions": lesneOblasti
+            },
+            { collapsed: true }
+        ).addTo(map);
 
-        // Locate user
+        // Geolocation
         map.locate({ setView: false, maxZoom: 14, enableHighAccuracy: true });
         map.on('locationfound', function(e) {
             L.circleMarker(e.latlng, { radius: 8, color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.9, weight: 2 })
-                .addTo(map)
-                .bindPopup("You are here").openPopup();
+                .addTo(map).bindPopup("You are here").openPopup();
         });
 
         // Opacity slider
@@ -163,126 +125,218 @@
         slider.addEventListener('input', function() {
             var val = this.value / 100;
             opacityValue.textContent = this.value + '%';
-            allWmsLayers.forEach(function(layer) {
-                layer.setOpacity(val);
-            });
+            allWmsLayers.forEach(function(l) { l.setOpacity(val); });
         });
 
-        // Scale control
         L.control.scale({ imperial: false }).addTo(map);
 
-        // --- ArcGIS REST Identify on click ---
-        // Using ArcGIS REST identify endpoint (returns JSON, better CORS support than WMS GetFeatureInfo)
+        // =============================================
+        // Click-to-identify: query 3 ArcGIS REST endpoints
+        // =============================================
+
         var identifySources = [
-            {
-                name: 'Forest stand',
-                url: 'https://gis.nlcsk.org/arcgis/rest/services/MPRV/JPRL_ZBGIS/MapServer/identify'
-            },
-            {
-                name: 'Tree species',
-                url: 'https://gis.nlcsk.org/arcgis/rest/services/Inspire/DrevinoveZlozenie/MapServer/identify'
-            }
+            { key: 'jprl',    url: 'https://gis.nlcsk.org/arcgis/rest/services/MPRV/JPRL_ZBGIS/MapServer/identify' },
+            { key: 'lestypy', url: 'https://gis.nlcsk.org/arcgis/rest/services/Inspire/LesneTypy/MapServer/identify' },
+            { key: 'dreviny', url: 'https://gis.nlcsk.org/arcgis/rest/services/Inspire/DrevinoveZlozenie/MapServer/identify' }
         ];
 
+        // Forest category translations
+        var categoryLabels = {
+            'H': { text: 'Commercial', cls: 'cat-H' },
+            'O': { text: 'Protective', cls: 'cat-O' },
+            'U': { text: 'Special purpose', cls: 'cat-U' }
+        };
+
+        // Species colors for the bar chart
+        var speciesColors = ['#2d6a4f','#40916c','#52b788','#74c69d','#95d5b2','#b7e4c7','#d8f3dc','#1b4332','#081c15','#a7c957'];
+
         function buildIdentifyUrl(source, latlng) {
-            var bounds = map.getBounds();
-            var size = map.getSize();
+            var b = map.getBounds(), s = map.getSize();
             var params = {
                 geometry: latlng.lng + ',' + latlng.lat,
                 geometryType: 'esriGeometryPoint',
                 sr: '4326',
                 layers: 'all',
                 tolerance: '10',
-                mapExtent: [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()].join(','),
-                imageDisplay: size.x + ',' + size.y + ',96',
+                mapExtent: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].join(','),
+                imageDisplay: s.x + ',' + s.y + ',96',
                 returnGeometry: 'false',
                 f: 'json'
             };
-            var qs = Object.keys(params).map(function(k) {
+            return source.url + '?' + Object.keys(params).map(function(k) {
                 return k + '=' + encodeURIComponent(params[k]);
             }).join('&');
-            return source.url + '?' + qs;
         }
 
-        // Friendly labels for common JPRL/composition fields
-        var fieldLabels = {
-            'PORAST': 'Stand ID', 'PLOCHA': 'Area (ha)', 'DREVIN': 'Main species',
-            'VEK': 'Age (years)', 'ZAKMENENIE': 'Stocking', 'BONITA': 'Site quality',
-            'HOSPSP': 'Management', 'LESNA_OBL': 'Forest region', 'LHC': 'Mgmt unit',
-            'ETAZ': 'Storey', 'ZASTUP': 'Share (%)', 'SKUP_LT': 'Forest type group',
-            'DREVINA': 'Species', 'ZASTUPENIE': 'Share (%)', 'POCEL': 'Sub-compartment',
-            'PSK': 'Stand', 'ODDIEL': 'Compartment', 'DIELEC': 'Sub-comp.', 'PORCEL': 'Parcel',
-            'KAT_LES': 'Forest category', 'VYSKA': 'Height (m)', 'HRUBY': 'Diameter (cm)'
-        };
-
-        var skipFields = ['OBJECTID', 'SHAPE', 'Shape', 'SHAPE.AREA', 'SHAPE.LEN',
-            'SHAPE_Length', 'SHAPE_Area', 'Shape_Length', 'Shape_Area', 'FID', 'OBJECTID_1'];
-
-        function formatIdentifyResults(name, data) {
-            if (!data || !data.results || data.results.length === 0) return '';
-            var html = '<h3>' + name + '</h3>';
-            data.results.forEach(function(result, i) {
-                var attrs = result.attributes || {};
-                if (i > 0) html += '<hr style="margin:6px 0;border:none;border-top:1px solid #ddd;">';
-                html += '<table>';
-                Object.keys(attrs).forEach(function(key) {
-                    if (skipFields.indexOf(key) !== -1) return;
-                    var val = attrs[key];
-                    if (val === null || val === '' || val === 'Null' || val === 'null') return;
-                    var label = fieldLabels[key] || key;
-                    html += '<tr><td>' + label + '</td><td>' + val + '</td></tr>';
-                });
-                html += '</table>';
-            });
-            return html;
-        }
-
-        // Try direct fetch, fall back to CORS proxy if blocked
-        function fetchWithCorsFallback(url) {
+        function fetchJson(url) {
             return fetch(url).then(function(r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();
             }).catch(function() {
-                // Try CORS proxy as fallback
-                var proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
-                return fetch(proxyUrl).then(function(r) {
+                // CORS fallback
+                return fetch('https://corsproxy.io/?' + encodeURIComponent(url)).then(function(r) {
                     if (!r.ok) throw new Error('Proxy HTTP ' + r.status);
                     return r.json();
                 });
             });
         }
 
+        function buildPopupHtml(data) {
+            var jprl = data.jprl, lestypy = data.lestypy, dreviny = data.dreviny;
+            var html = '<div class="fi">';
+
+            var hasAny = false;
+
+            // --- Forest category & basic info from JPRL ---
+            if (jprl && jprl.results && jprl.results.length > 0) {
+                hasAny = true;
+                var a = jprl.results[0].attributes;
+
+                // Category
+                var kl = a.KL || a.kl || '';
+                var cat = categoryLabels[kl];
+                if (cat) {
+                    html += '<div class="val"><span class="category-tag ' + cat.cls + '">' + cat.text + ' forest</span></div>';
+                }
+
+                // Stand info
+                var stand = a.cispor || a.CISPOR || '';
+                var area = a.Plocha || a.PLOCHA || a.plocha;
+                var unit = a.TxLC || a.TXLC || a.LHC || a.lhc || '';
+
+                if (stand || area || unit) {
+                    html += '<div class="section">';
+                    html += '<div class="section-title">Stand info</div>';
+                    if (stand) html += '<div class="val"><b>Stand:</b> ' + stand + '</div>';
+                    if (area) html += '<div class="val"><b>Area:</b> ' + (area > 1000 ? (area / 10000).toFixed(2) + ' ha' : area + ' m\u00B2') + '</div>';
+                    if (unit) html += '<div class="val"><b>Forest unit:</b> ' + unit + '</div>';
+                    html += '</div>';
+                }
+            }
+
+            // --- Forest type from LesneTypy (HSLT - this is "tvrde luhy" etc.) ---
+            if (lestypy && lestypy.results && lestypy.results.length > 0) {
+                hasAny = true;
+                html += '<div class="section">';
+                html += '<div class="section-title">Forest / habitat type</div>';
+                lestypy.results.forEach(function(r) {
+                    var a = r.attributes;
+                    // Try various field names that might contain the forest type name
+                    var typeName = a.LC_LandCoverSurfaces || a.LandCoverSurfaces || a.NAZOV || a.Nazov
+                        || a.nazov || a.NAME || a.Name || a.HSLT || a.hslt
+                        || a.SKUP_LT || a.skup_lt || a.SLT || a.slt || '';
+                    var typeCode = a.KOD || a.kod || a.CODE || a.code || a.HSLT_KOD || '';
+                    // Also check the layerName from identify response
+                    var layerName = r.layerName || '';
+
+                    if (typeName || typeCode || layerName) {
+                        if (typeName) html += '<div class="val"><b>' + typeName + '</b></div>';
+                        if (typeCode) html += '<div class="val">Code: ' + typeCode + '</div>';
+                        if (!typeName && layerName) html += '<div class="val"><b>' + layerName + '</b></div>';
+                    }
+
+                    // Show any other non-geometry, non-ID fields
+                    var skipKeys = ['OBJECTID','FID','Shape','SHAPE','Shape_Length','Shape_Area',
+                        'SHAPE_Length','SHAPE_Area','SHAPE.AREA','SHAPE.LEN'];
+                    var shown = ['LC_LandCoverSurfaces','LandCoverSurfaces','NAZOV','Nazov','nazov',
+                        'NAME','Name','HSLT','hslt','SKUP_LT','skup_lt','SLT','slt','KOD','kod','CODE','code','HSLT_KOD'];
+                    Object.keys(a).forEach(function(k) {
+                        if (skipKeys.indexOf(k) !== -1 || shown.indexOf(k) !== -1) return;
+                        var v = a[k];
+                        if (v === null || v === '' || v === 'Null') return;
+                        html += '<div class="val"><b>' + k + ':</b> ' + v + '</div>';
+                    });
+                });
+                html += '</div>';
+            }
+
+            // --- Tree species composition ---
+            if (dreviny && dreviny.results && dreviny.results.length > 0) {
+                hasAny = true;
+                html += '<div class="section">';
+                html += '<div class="section-title">Tree species composition</div>';
+
+                // Collect species data
+                var species = [];
+                dreviny.results.forEach(function(r) {
+                    var a = r.attributes;
+                    var name = a.DREVINA || a.Drevina || a.drevina || a.NAZOV || a.nazov || a.NAME || r.layerName || r.value || '';
+                    var pct = parseFloat(a.ZASTUPENIE || a.Zastupenie || a.zastupenie || a.ZASTUP || a.zastup || a.PCT || 0);
+                    if (name) species.push({ name: name, pct: pct });
+                });
+
+                // Species bar
+                if (species.length > 0 && species.some(function(s) { return s.pct > 0; })) {
+                    html += '<div class="species-bar">';
+                    species.forEach(function(s, i) {
+                        if (s.pct > 0) {
+                            html += '<div style="width:' + s.pct + '%;background:' + speciesColors[i % speciesColors.length] + '" title="' + s.name + ' ' + s.pct + '%"></div>';
+                        }
+                    });
+                    html += '</div>';
+                }
+
+                species.forEach(function(s, i) {
+                    html += '<div class="species-item val">';
+                    html += '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + speciesColors[i % speciesColors.length] + ';margin-right:4px;vertical-align:middle;"></span>';
+                    html += '<b>' + s.name + '</b>';
+                    if (s.pct > 0) html += ' — ' + s.pct + '%';
+                    html += '</div>';
+                });
+
+                // Show any other fields from first result
+                if (dreviny.results.length > 0) {
+                    var a0 = dreviny.results[0].attributes;
+                    var skipD = ['OBJECTID','FID','Shape','SHAPE','Shape_Length','Shape_Area',
+                        'SHAPE_Length','SHAPE_Area','SHAPE.AREA','SHAPE.LEN',
+                        'DREVINA','Drevina','drevina','NAZOV','nazov','NAME',
+                        'ZASTUPENIE','Zastupenie','zastupenie','ZASTUP','zastup','PCT'];
+                    Object.keys(a0).forEach(function(k) {
+                        if (skipD.indexOf(k) !== -1) return;
+                        var v = a0[k];
+                        if (v === null || v === '' || v === 'Null') return;
+                        // Show stand-level info only once
+                        html += '<div class="val"><b>' + k + ':</b> ' + v + '</div>';
+                    });
+                }
+
+                html += '</div>';
+            }
+
+            if (!hasAny) {
+                html += '<p class="error">No forest data at this location.<br>Try zooming in and tapping on a colored forest area.</p>';
+            }
+
+            // Raw data debug section
+            html += '<div class="debug"><details><summary>Raw data</summary><pre>';
+            html += JSON.stringify(data, null, 1);
+            html += '</pre></details></div>';
+
+            html += '</div>';
+            return html;
+        }
+
         map.on('click', function(e) {
-            var popup = L.popup({ maxWidth: 300, maxHeight: 400 })
+            var popup = L.popup({ maxWidth: 320, maxHeight: 450 })
                 .setLatLng(e.latlng)
-                .setContent('<div class="forest-info"><p class="loading">Querying forest data...</p></div>')
+                .setContent('<div class="fi"><p class="loading">Querying forest data...</p></div>')
                 .openOn(map);
 
-            var results = [];
+            var data = {};
             var done = 0;
 
-            identifySources.forEach(function(source, idx) {
+            identifySources.forEach(function(source) {
                 var url = buildIdentifyUrl(source, e.latlng);
-                fetchWithCorsFallback(url)
-                    .then(function(data) {
-                        results[idx] = formatIdentifyResults(source.name, data);
-                    })
+                fetchJson(url)
+                    .then(function(json) { data[source.key] = json; })
                     .catch(function(err) {
-                        console.error('Identify failed for', source.name, err);
-                        results[idx] = '';
+                        console.error('Identify failed:', source.key, err);
+                        data[source.key] = null;
                     })
                     .finally(function() {
                         done++;
                         if (done === identifySources.length) {
-                            var html = '<div class="forest-info">';
-                            var combined = results.join('');
-                            if (combined) {
-                                html += combined;
-                            } else {
-                                html += '<p class="error">No forest data at this location.<br>Try zooming in and clicking on a colored forest area.</p>';
-                            }
-                            html += '</div>';
-                            popup.setContent(html);
+                            popup.setContent(buildPopupHtml(data));
                         }
                     });
             });
