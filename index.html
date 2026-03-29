@@ -59,11 +59,12 @@
         .fi .geo-age { font-size: 13px; color: #666; margin-bottom: 6px; }
         .fi .loading { color: #888; font-style: italic; }
         .fi .error { color: #666; }
-
-        /* Layer control source links */
-        .source-link { font-size: 10px; color: #999; display: block; padding: 0 0 2px 22px; }
-        .source-link a { color: #888; text-decoration: none; }
-        .source-link a:hover { text-decoration: underline; }
+        .fi .source { font-size: 11px; color: #aaa; margin-top: 4px; }
+        .fi .source a { color: #999; text-decoration: none; }
+        .fi .source a:hover { text-decoration: underline; color: #666; }
+        .fi .more-link { font-size: 12px; margin-top: 2px; }
+        .fi .more-link a { color: #4a90d9; text-decoration: none; }
+        .fi .more-link a:hover { text-decoration: underline; }
 
         #save-area {
             position: absolute; bottom: 30px; right: 10px; z-index: 1000;
@@ -163,15 +164,12 @@
             if (labels.length > forestCount) {
                 // Forest header
                 var fh = document.createElement('div');
-                fh.innerHTML = '<strong style="font-size:12px;color:#1a5c1a;display:block;padding:4px 0 2px;">FOREST</strong>'
-                    + '<span class="source-link">Data: <a href="https://web.nlcsk.org" target="_blank">Národné lesnícke centrum</a></span>';
+                fh.innerHTML = '<strong style="font-size:12px;color:#1a5c1a;display:block;padding:4px 0 2px;">FOREST</strong>';
                 container.insertBefore(fh, labels[0]);
 
-                // Geology header
                 var gh = document.createElement('div');
                 gh.innerHTML = '<hr style="margin:6px 0;border:none;border-top:2px solid #ccc;">'
-                    + '<strong style="font-size:12px;color:#8b5e3c;display:block;padding:2px 0;">GEOLOGY</strong>'
-                    + '<span class="source-link">Data: <a href="https://www.geology.sk" target="_blank">Štátny geologický ústav Dionýza Štúra</a></span>';
+                    + '<strong style="font-size:12px;color:#8b5e3c;display:block;padding:2px 0;">GEOLOGY</strong>';
                 container.insertBefore(gh, labels[forestCount]);
             }
         }, 100);
@@ -278,9 +276,10 @@
             return srcKey + ':' + (Math.round(latlng.lat * 1000) / 1000) + ',' + (Math.round(latlng.lng * 1000) / 1000);
         }
 
-        function buildPopup(data) {
+        function buildPopup(data, latlng) {
             var html = '<div class="fi">';
             var hasForest = false, hasGeo = false;
+            var lat = latlng.lat.toFixed(5), lng = latlng.lng.toFixed(5);
 
             // ---- FOREST ----
             var forestHtml = '';
@@ -303,6 +302,8 @@
             }
             if (hasForest) {
                 html += '<div class="section-label section-forest">FOREST</div>' + forestHtml;
+                html += '<div class="more-link"><a href="https://gis.nlcsk.org/islhp/" target="_blank">More detail in ISLHP &#8599;</a></div>';
+                html += '<div class="source">Source: <a href="https://web.nlcsk.org" target="_blank">Národné lesnícke centrum</a></div>';
             }
 
             // ---- GEOLOGY ----
@@ -330,6 +331,8 @@
                 });
                 if (hasGeo) {
                     html += '<div class="section-label section-geology">GEOLOGY</div>' + geoHtml;
+                    html += '<div class="more-link"><a href="https://apl.geology.sk/gm50js/" target="_blank">Full geological map &#8599;</a></div>';
+                    html += '<div class="source">Source: <a href="https://www.geology.sk" target="_blank">SGÚDŠ</a></div>';
                 }
             }
 
@@ -365,7 +368,7 @@
                 // Check in-memory cache
                 if (identifyCache[ck]) {
                     data[src.key] = identifyCache[ck];
-                    if (++done === total) popup.setContent(buildPopup(data));
+                    if (++done === total) popup.setContent(buildPopup(data, e.latlng));
                     return;
                 }
                 fetchJson(identifyUrl(src, e.latlng))
@@ -375,7 +378,7 @@
                     })
                     .catch(function() { data[src.key] = null; })
                     .finally(function() {
-                        if (++done === total) popup.setContent(buildPopup(data));
+                        if (++done === total) popup.setContent(buildPopup(data, e.latlng));
                     });
             });
         });
