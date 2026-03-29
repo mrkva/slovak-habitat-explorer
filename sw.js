@@ -105,7 +105,17 @@ self.addEventListener('fetch', function(e) {
 
 function normalizeIdentifyUrl(url) {
     // Strip viewport-dependent params so cached data matches regardless of pan/zoom
-    return url.replace(/[&?]mapExtent=[^&]*/g, '').replace(/[&?]imageDisplay=[^&]*/g, '');
+    var n = url.replace(/[&?]mapExtent=[^&]*/g, '').replace(/[&?]imageDisplay=[^&]*/g, '');
+    // Snap geometry to 0.01-degree grid so save grid and tap coords share cache keys
+    return n.replace(/geometry=([^&]+)/, function(m, coords) {
+        var p = coords.split(',');
+        if (p.length === 2) {
+            var lng = (Math.round(parseFloat(p[0]) * 100) / 100).toFixed(2);
+            var lat = (Math.round(parseFloat(p[1]) * 100) / 100).toFixed(2);
+            return 'geometry=' + lng + ',' + lat;
+        }
+        return m;
+    });
 }
 
 function isTileRequest(url) {

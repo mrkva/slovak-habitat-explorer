@@ -388,8 +388,10 @@
             var geoActive = isGroupActive('geology');
             var gridStep = 0.01;
             var identifyUrls = [];
-            for (var lat = b.getSouth(); lat <= b.getNorth(); lat += gridStep) {
-                for (var lng = b.getWest(); lng <= b.getEast(); lng += gridStep) {
+            var startLat = Math.floor(b.getSouth() * 100) / 100;
+            var startLng = Math.floor(b.getWest() * 100) / 100;
+            for (var lat = startLat; lat <= b.getNorth(); lat += gridStep) {
+                for (var lng = startLng; lng <= b.getEast(); lng += gridStep) {
                     var ll = L.latLng(lat, lng);
                     identifySources.forEach(function(src) {
                         if (src.group === 'forest' && !forestActive) return;
@@ -424,7 +426,16 @@
                     })).then(nextTile);
                 }
                 function normalizeIdentifyUrl(url) {
-                    return url.replace(/[&?]mapExtent=[^&]*/g, '').replace(/[&?]imageDisplay=[^&]*/g, '');
+                    var n = url.replace(/[&?]mapExtent=[^&]*/g, '').replace(/[&?]imageDisplay=[^&]*/g, '');
+                    return n.replace(/geometry=([^&]+)/, function(m, coords) {
+                        var p = coords.split(',');
+                        if (p.length === 2) {
+                            var lng = (Math.round(parseFloat(p[0]) * 100) / 100).toFixed(2);
+                            var lat = (Math.round(parseFloat(p[1]) * 100) / 100).toFixed(2);
+                            return 'geometry=' + lng + ',' + lat;
+                        }
+                        return m;
+                    });
                 }
                 function cacheData() {
                     progress.textContent = loaded + '/' + total + ' \u2014 caching data...';
