@@ -260,18 +260,29 @@
             }
 
             // ---- GEOLOGY section ----
-            // From the real response, the useful data is in results where value contains the description.
-            // Fields: value (the main description text), Vek1 (age), Útvar (formation period)
-            // We skip line/boundary layers (LAYER=H1 etc.) and only show area descriptions.
+            // The description (e.g. "fluviálne sedimenty: ...") comes from r.value
+            // Skip line/boundary layers (layerName like "H1", short values)
             if (data.geo && data.geo.results && data.geo.results.length > 0) {
                 var geoHtml = '';
                 var seen = {};
+                var skipLayers = ['H1','H2','H3','H4','H5','H6','H7','H8','H9','H10'];
                 data.geo.results.forEach(function(r) {
                     var a = r.attributes;
-                    // The main description is in r.value (the identify result value)
-                    var desc = r.value || findField(a, ['NAZOV','Nazov','POPIS','Popis','LABEL','Label']);
-                    // Skip line features / boundaries (they have short codes like "H1", "geologicke hranice")
-                    if (!desc || desc.length < 10) return;
+                    var ln = r.layerName || '';
+                    // Skip boundary/line layers
+                    if (skipLayers.indexOf(ln) !== -1) return;
+
+                    // Get the main description - try r.value first, then attribute fields
+                    var desc = r.value || '';
+                    if (!desc || desc.length < 5) {
+                        // Try all string attribute values to find the long description
+                        Object.keys(a).forEach(function(k) {
+                            var v = a[k];
+                            if (typeof v === 'string' && v.length > 20 && !desc) desc = v;
+                        });
+                    }
+                    if (!desc || desc.length < 5) return;
+
                     // Deduplicate
                     if (seen[desc]) return;
                     seen[desc] = true;
