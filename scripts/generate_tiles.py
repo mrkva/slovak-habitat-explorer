@@ -120,6 +120,7 @@ def query_features(source_url, bbox, fields, simplify=MAX_OFFSET):
             'geometry': f'{west},{south},{east},{north}',
             'geometryType': 'esriGeometryEnvelope',
             'spatialRel': 'esriSpatialRelIntersects',
+            'inSR': '4326',
             'outFields': fields,
             'returnGeometry': 'true',
             'outSR': '4326',
@@ -148,29 +149,30 @@ def query_features(source_url, bbox, fields, simplify=MAX_OFFSET):
 
 def arcgis_to_geojson(data):
     """Convert ArcGIS JSON response to GeoJSON FeatureCollection."""
+    # Build alias map: field_name -> alias (e.g. 'popis' -> 'Popis')
+    aliases = data.get('fieldAliases', {})
+
     features = []
     for feat in data.get('features', []):
         geom = feat.get('geometry', {})
         attrs = feat.get('attributes', {})
 
-        # Convert ArcGIS geometry to GeoJSON
         rings = geom.get('rings')
-        if rings:
-            # Separate outer rings from holes using the ring orientation rule
-            # ArcGIS: clockwise = outer, counter-clockwise = hole
-            # GeoJSON: counter-clockwise = outer, clockwise = hole
-            # For simplicity, treat first ring as outer, rest as holes per polygon
-            # A more robust approach would check ring area/orientation
-            geojson_geom = {
-                'type': 'Polygon',
-                'coordinates': rings,
-            }
-        else:
-            continue  # Skip non-polygon features
+        if not rings:
+            continue
 
-        # Clean up null attributes
-        clean_attrs = {k: v for k, v in attrs.items()
-                       if v is not None and v != 'Null' and v != ''}
+        geojson_geom = {
+            'type': 'Polygon',
+            'coordinates': rings,
+        }
+
+        # Remap field names to their aliases for consistent naming
+        clean_attrs = {}
+        for k, v in attrs.items():
+            if v is None or v == 'Null' or v == '':
+                continue
+            alias = aliases.get(k, k)
+            clean_attrs[alias] = v
 
         features.append({
             'type': 'Feature',

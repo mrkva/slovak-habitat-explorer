@@ -352,9 +352,9 @@
                     if (!popis || popis === '-') return;
                     if (seen[popis]) return;
                     seen[popis] = true;
-                    var utvar = a['\u00datvar'] || a['Utvar'] || '';
+                    var utvar = a['\u00datvar'] || a['Utvar'] || a['utv'] || '';
                     var vek1 = a['Vek1'] || a['vek1'] || '';
-                    var suvrstvie = a['S\u00favrstvie'] || a['Suvrstvie'] || '';
+                    var suvrstvie = a['S\u00favrstvie'] || a['Suvrstvie'] || a['ksuvrstvie'] || '';
                     geoHtml += '<div class="geo-name">' + popis + '</div>';
                     var details = [];
                     if (utvar && utvar !== '-') details.push(utvar);
