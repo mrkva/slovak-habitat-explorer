@@ -32,8 +32,8 @@ OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 # Geometry simplification tolerance in degrees (~200m at Slovak latitudes)
 MAX_OFFSET = 0.002
 
-MAX_RETRIES = 3
-RETRY_DELAY = 3  # seconds
+MAX_RETRIES = 4
+RETRY_DELAY = 5  # seconds (multiplied by attempt number)
 
 # File that tracks empty tiles so we don't re-query them
 EMPTY_MANIFEST = '.empty_tiles'
@@ -243,7 +243,20 @@ def generate_source(name, source, num_workers=4):
     empty = 0
     errors = 0
     lock = threading.Lock()
+    rate_lock = threading.Lock()
+    last_request_time = [0.0]  # mutable for closure
+    min_interval = 0.25  # seconds between requests (4/sec max)
     start_time = time.time()
+
+    def throttled_query(source_url, bbox, fields):
+        """Rate-limited query to avoid overwhelming the server."""
+        with rate_lock:
+            now = time.time()
+            wait = min_interval - (now - last_request_time[0])
+            if wait > 0:
+                time.sleep(wait)
+            last_request_time[0] = time.time()
+        return query_features(source_url, bbox, fields)
 
     def process_tile(xy):
         nonlocal saved, empty, errors
@@ -252,7 +265,7 @@ def generate_source(name, source, num_workers=4):
         tile_path = os.path.join(tile_dir, f'{y}.json')
 
         bbox = tile_bounds(x, y, ZOOM)
-        data = query_features(source['url'], bbox, source['fields'])
+        data = throttled_query(source['url'], bbox, source['fields'])
 
         with lock:
             if data and data.get('features'):
