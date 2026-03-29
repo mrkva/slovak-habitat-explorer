@@ -1,4 +1,4 @@
-var CACHE_SHELL = 'forest-shell-v2';
+var CACHE_SHELL = 'forest-shell-v3';
 var CACHE_TILES = 'forest-tiles-v1';
 var CACHE_DATA = 'forest-data-v1';
 
@@ -105,5 +105,6 @@ function isTileRequest(url) {
     return url.indexOf('tile.openstreetmap.org') !== -1
         || url.indexOf('arcgisonline.com') !== -1
         || url.indexOf('WMSServer') !== -1
-        || url.indexOf('WmsServer') !== -1;
+        || url.indexOf('WmsServer') !== -1
+        || url.indexOf('ags.geology.sk') !== -1;
 }

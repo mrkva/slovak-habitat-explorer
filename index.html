@@ -41,6 +41,10 @@
         .fi .cat-O { background: #059669; }
         .fi .cat-U { background: #7c3aed; }
         .fi .area { font-size: 13px; color: #777; }
+        .fi .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #999; letter-spacing: 0.5px; margin: 8px 0 3px; }
+        .fi .geo-name { font-size: 15px; font-weight: 600; color: #8b5e3c; }
+        .fi .geo-detail { font-size: 13px; color: #666; margin-bottom: 2px; }
+        .fi .divider { border: none; border-top: 1px solid #eee; margin: 8px 0; }
         .fi .loading { color: #888; font-style: italic; }
         .fi .error { color: #666; }
 
@@ -90,28 +94,45 @@
             attribution: '&copy; Esri', maxZoom: 19
         });
 
-        // WMS overlays
-        var wmsAttr = '&copy; <a href="https://web.nlcsk.org">NLC</a>';
-        function wms(url, extra) {
+        // WMS helper
+        function wms(url, attr, extra) {
             return L.tileLayer.wms(url, Object.assign({
-                format: 'image/png', transparent: true, opacity: 0.7, attribution: wmsAttr
+                format: 'image/png', transparent: true, opacity: 0.7, attribution: attr
             }, extra || {}));
         }
 
-        var jprl = wms("https://gis.nlcsk.org/arcgis/services/MPRV/JPRL_ZBGIS/MapServer/WMSServer",
-            { layers: '0', version: '1.1.1' }).addTo(map);
-        var drevinoveZlozenie = wms("https://gis.nlcsk.org/arcgis/services/Inspire/DrevinoveZlozenie/MapServer/WmsServer", { layers: '0' });
-        var lesneTypy = wms("https://gis.nlcsk.org/arcgis/services/Inspire/LesneTypy/MapServer/WMSServer", { layers: '0' });
-        var lesneCesty = wms("https://gis.nlcsk.org/arcgis/services/Inspire/LesneCesty/MapServer/WMSServer", { layers: '0' });
-        var lhc = wms("https://gis.nlcsk.org/arcgis/services/Inspire/LHC/MapServer/WMSServer", { layers: '0' });
-        var lesneOblasti = wms("https://gis.nlcsk.org/arcgis/services/Inspire/LesneOblasti/MapServer/WMSServer", { layers: '0' });
+        var nlcAttr = '&copy; <a href="https://web.nlcsk.org">NLC</a>';
+        var geoAttr = '&copy; <a href="https://www.geology.sk">SGÚDŠ</a>';
 
-        var allWmsLayers = [jprl, drevinoveZlozenie, lesneTypy, lesneCesty, lhc, lesneOblasti];
+        // Forest overlays (NLC)
+        var jprl = wms("https://gis.nlcsk.org/arcgis/services/MPRV/JPRL_ZBGIS/MapServer/WMSServer",
+            nlcAttr, { layers: '0', version: '1.1.1' }).addTo(map);
+        var drevinoveZlozenie = wms("https://gis.nlcsk.org/arcgis/services/Inspire/DrevinoveZlozenie/MapServer/WmsServer", nlcAttr, { layers: '0' });
+        var lesneTypy = wms("https://gis.nlcsk.org/arcgis/services/Inspire/LesneTypy/MapServer/WMSServer", nlcAttr, { layers: '0' });
+        var lesneCesty = wms("https://gis.nlcsk.org/arcgis/services/Inspire/LesneCesty/MapServer/WMSServer", nlcAttr, { layers: '0' });
+        var lhc = wms("https://gis.nlcsk.org/arcgis/services/Inspire/LHC/MapServer/WMSServer", nlcAttr, { layers: '0' });
+        var lesneOblasti = wms("https://gis.nlcsk.org/arcgis/services/Inspire/LesneOblasti/MapServer/WMSServer", nlcAttr, { layers: '0' });
+
+        // Geology overlays (SGÚDŠ)
+        var geoMap = wms("https://ags.geology.sk/arcgis/services/WebServices/GM50/MapServer/WMSServer",
+            geoAttr, { layers: '0', version: '1.1.1' });
+        var geoIGR = wms("https://ags.geology.sk/arcgis/services/WebServices/IGR50/MapServer/WMSServer",
+            geoAttr, { layers: '0', version: '1.1.1' });
+        var geoDeposits = wms("https://ags.geology.sk/arcgis/services/WebServices/LOZISKA/MapServer/WMSServer",
+            geoAttr, { layers: '0', version: '1.1.1' });
+
+        var allWmsLayers = [jprl, drevinoveZlozenie, lesneTypy, lesneCesty, lhc, lesneOblasti,
+                            geoMap, geoIGR, geoDeposits];
 
         L.control.layers(
             { "OpenStreetMap": osm, "Satellite": satellite },
-            { "Forest stands (JPRL)": jprl, "Tree species": drevinoveZlozenie, "Forest types": lesneTypy,
-              "Forest roads": lesneCesty, "Management units": lhc, "Forest regions": lesneOblasti },
+            {
+                "Forest stands (JPRL)": jprl, "Tree species": drevinoveZlozenie, "Forest types": lesneTypy,
+                "Forest roads": lesneCesty, "Management units": lhc, "Forest regions": lesneOblasti,
+                "Geological map 1:50k": geoMap,
+                "Engineering-geo map 1:50k": geoIGR,
+                "Mineral deposits": geoDeposits
+            },
             { collapsed: true }
         ).addTo(map);
 
@@ -136,7 +157,8 @@
         // =============================================
         var identifySources = [
             { key: 'jprl',    url: 'https://gis.nlcsk.org/arcgis/rest/services/MPRV/JPRL_ZBGIS/MapServer/identify' },
-            { key: 'lestypy', url: 'https://gis.nlcsk.org/arcgis/rest/services/Inspire/LesneTypy/MapServer/identify' }
+            { key: 'lestypy', url: 'https://gis.nlcsk.org/arcgis/rest/services/Inspire/LesneTypy/MapServer/identify' },
+            { key: 'geo',     url: 'https://ags.geology.sk/arcgis/rest/services/WebServices/GM50/MapServer/identify' }
         ];
 
         var categoryLabels = {
@@ -214,8 +236,55 @@
                 }
             }
 
-            if (!hasType && !hasCat) {
-                html += '<p class="error">No forest data here.<br>Zoom in and tap a forest area.</p>';
+            // --- Geology from GM50 ---
+            var hasGeo = false;
+            if (data.geo && data.geo.results && data.geo.results.length > 0) {
+                hasGeo = true;
+                if (hasType || hasCat) html += '<hr class="divider">';
+                html += '<div class="section-label">Geology</div>';
+                data.geo.results.forEach(function(r, i) {
+                    var a = r.attributes;
+                    if (i > 0) html += '<hr class="divider">';
+                    // Try common field names for rock/formation name
+                    var name = findField(a, ['NAZOV','Nazov','nazov','NAME','Name','POPIS','Popis',
+                        'HORNINA','Hornina','LITOLOGIA','Litologia','ROCK_TYPE','Rock_Type',
+                        'FORMATION','Formation','FORMACIA','Formacia','LABEL','Label']);
+                    var age = findField(a, ['VEK','Vek','vek','AGE','Age','STRATIG','Stratig',
+                        'OBDOBIE','Obdobie','PERIOD','Period','ERA','Era','EPOCH','Epoch']);
+                    var litho = findField(a, ['LITOTYP','Litotyp','LITOLOGIA','Litologia',
+                        'ROCK','Rock','HORNINY','Horniny','DESCRIPTION','Description',
+                        'POPIS_ENG','POPIS_SK','Popis_SK']);
+                    var layerName = r.layerName || '';
+
+                    if (name) {
+                        html += '<div class="geo-name">' + name + '</div>';
+                    } else if (layerName) {
+                        html += '<div class="geo-name">' + layerName + '</div>';
+                    }
+                    if (age) html += '<div class="geo-detail">Age: ' + age + '</div>';
+                    if (litho && litho !== name) html += '<div class="geo-detail">' + litho + '</div>';
+
+                    // Show remaining non-trivial fields
+                    var shown = ['NAZOV','Nazov','nazov','NAME','Name','POPIS','Popis',
+                        'HORNINA','Hornina','LITOLOGIA','Litologia','ROCK_TYPE','Rock_Type',
+                        'FORMATION','Formation','FORMACIA','Formacia','LABEL','Label',
+                        'VEK','Vek','vek','AGE','Age','STRATIG','Stratig',
+                        'OBDOBIE','Obdobie','PERIOD','Period','ERA','Era','EPOCH','Epoch',
+                        'LITOTYP','Litotyp','ROCK','Rock','HORNINY','Horniny',
+                        'DESCRIPTION','Description','POPIS_ENG','POPIS_SK','Popis_SK',
+                        'OBJECTID','FID','Shape','SHAPE','Shape_Length','Shape_Area',
+                        'SHAPE_Length','SHAPE_Area','SHAPE.AREA','SHAPE.LEN'];
+                    Object.keys(a).forEach(function(k) {
+                        if (shown.indexOf(k) !== -1) return;
+                        var v = a[k];
+                        if (v === null || v === '' || v === 'Null') return;
+                        html += '<div class="geo-detail"><b>' + k + ':</b> ' + v + '</div>';
+                    });
+                });
+            }
+
+            if (!hasType && !hasCat && !hasGeo) {
+                html += '<p class="error">No data here.<br>Zoom in and tap a forest or geological area.</p>';
             }
 
             html += '</div>';
