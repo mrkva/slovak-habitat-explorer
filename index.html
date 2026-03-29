@@ -64,16 +64,32 @@
         .fi .source a { color: #999; text-decoration: none; }
         .fi .source a:hover { text-decoration: underline; color: #666; }
 
-        #save-area {
-            position: absolute; bottom: 30px; right: 10px; z-index: 1000;
+        .save-btn {
+            position: absolute; right: 10px; z-index: 1000;
             background: #1a5c1a; color: white; border: none; border-radius: 8px;
             padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
-        #save-area:active { background: #145214; }
+        .save-btn:active { background: #145214; }
+        #save-area { bottom: 30px; }
+        #download-all { bottom: 72px; background: #2d6b2d; }
+        #download-panel {
+            position: absolute; bottom: 114px; right: 10px; z-index: 1000;
+            background: white; border-radius: 8px; padding: 10px 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3); font-size: 12px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            display: none; min-width: 200px;
+        }
+        #download-panel .bar-bg {
+            background: #e5e7eb; border-radius: 4px; height: 8px; margin: 6px 0; overflow: hidden;
+        }
+        #download-panel .bar-fill {
+            background: #1a5c1a; height: 100%; width: 0%; transition: width 0.3s;
+        }
+        #download-panel .status { color: #555; }
         #save-progress {
-            position: absolute; bottom: 70px; right: 10px; z-index: 1000;
+            position: absolute; bottom: 114px; right: 10px; z-index: 1000;
             background: white; border-radius: 8px; padding: 8px 14px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3); font-size: 12px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -93,7 +109,12 @@
 <body>
     <div id="map"></div>
     <div id="hint">Tap the map to identify habitats</div>
-    <button id="save-area">Save offline</button>
+    <button id="save-area" class="save-btn">Save map tiles</button>
+    <button id="download-all" class="save-btn">Download all data</button>
+    <div id="download-panel">
+        <div class="status" id="download-status">Preparing...</div>
+        <div class="bar-bg"><div class="bar-fill" id="download-bar"></div></div>
+    </div>
     <div id="save-progress"></div>
     <div id="opacity-panel">
         <div id="opacity-toggle"><span class="arrow">&#9654;</span> Layer opacity</div>
@@ -489,6 +510,72 @@
                     return nextData();
                 }
                 return nextTile();
+            });
+        });
+
+        // Request persistent storage so browser won't evict cached data
+        if (navigator.storage && navigator.storage.persist) {
+            navigator.storage.persist();
+        }
+
+        document.getElementById('download-all').addEventListener('click', function() {
+            var panel = document.getElementById('download-panel');
+            var status = document.getElementById('download-status');
+            var bar = document.getElementById('download-bar');
+            panel.style.display = 'block';
+
+            // Calculate all z12 tiles covering Slovakia
+            var SK = { south: 47.73, north: 49.61, west: 16.83, east: 22.57 };
+            var sw = L.latLng(SK.south, SK.west);
+            var ne = L.latLng(SK.north, SK.east);
+            var tMin = latLngToTile(sw, DATA_TILE_ZOOM);
+            var tMax = latLngToTile(ne, DATA_TILE_ZOOM);
+
+            var sources = ['jprl', 'lestypy', 'geo'];
+            var allUrls = [];
+            for (var tx = tMin.x; tx <= tMax.x; tx++) {
+                for (var ty = tMax.y; ty <= tMin.y; ty++) {
+                    sources.forEach(function(s) {
+                        allUrls.push('./data/' + s + '/' + DATA_TILE_ZOOM + '/' + tx + '/' + ty + '.json');
+                    });
+                }
+            }
+
+            var total = allUrls.length;
+            var loaded = 0;
+            var failed = 0;
+            status.textContent = '0 / ' + total;
+            bar.style.width = '0%';
+
+            caches.open('habitat-data-v1').then(function(cache) {
+                var queue = allUrls.slice();
+                function next() {
+                    if (queue.length === 0) {
+                        var msg = 'Done! ' + loaded + ' tiles cached.';
+                        if (failed > 0) msg += ' (' + failed + ' not yet available)';
+                        status.textContent = msg;
+                        bar.style.width = '100%';
+                        setTimeout(function() { panel.style.display = 'none'; }, 4000);
+                        return;
+                    }
+                    var chunk = queue.splice(0, 8);
+                    return Promise.all(chunk.map(function(u) {
+                        return cache.match(u).then(function(cached) {
+                            if (cached) { loaded++; return; }
+                            return fetch(u).then(function(r) {
+                                if (r.ok) { cache.put(u, r); loaded++; }
+                                else failed++;
+                            }).catch(function() { failed++; });
+                        });
+                    })).then(function() {
+                        var done = loaded + failed;
+                        var pct = Math.round(done / total * 100);
+                        bar.style.width = pct + '%';
+                        status.textContent = done + ' / ' + total + ' (' + Math.round(loaded / 1024 * 100) / 100 + ' k cached)';
+                        return next();
+                    });
+                }
+                return next();
             });
         });
 
