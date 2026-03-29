@@ -15,7 +15,9 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { height: 100%; width: 100%; }
-        #map { height: 100%; width: 100%; }
+        #map { height: 100%; width: 100%; cursor: default; }
+        .leaflet-grab { cursor: default !important; }
+        .leaflet-dragging .leaflet-grab { cursor: default !important; }
 
         .leaflet-control-layers { max-height: 80vh; overflow-y: auto; }
         .leaflet-control-layers-expanded { padding: 8px 12px; }
