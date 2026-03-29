@@ -115,7 +115,7 @@
 
         // Geology overlays (SGÚDŠ)
         var geoMap = wms("https://ags.geology.sk/arcgis/services/WebServices/GM50/MapServer/WMSServer",
-            geoAttr, { layers: '0', version: '1.1.1' });
+            geoAttr, { layers: '0', version: '1.1.1' }).addTo(map);
         var geoIGR = wms("https://ags.geology.sk/arcgis/services/WebServices/IGR50/MapServer/WMSServer",
             geoAttr, { layers: '0', version: '1.1.1' });
         var geoDeposits = wms("https://ags.geology.sk/arcgis/services/WebServices/LOZISKA/MapServer/WMSServer",
@@ -158,7 +158,7 @@
         var identifySources = [
             { key: 'jprl',    url: 'https://gis.nlcsk.org/arcgis/rest/services/MPRV/JPRL_ZBGIS/MapServer/identify' },
             { key: 'lestypy', url: 'https://gis.nlcsk.org/arcgis/rest/services/Inspire/LesneTypy/MapServer/identify' },
-            { key: 'geo',     url: 'https://ags.geology.sk/arcgis/rest/services/WebServices/GM50/MapServer/identify' }
+            { key: 'geo',     url: 'https://ags.geology.sk/arcgis/rest/services/WebServices/GM50/MapServer/identify', layers: 'visible', tolerance: '15' }
         ];
 
         var categoryLabels = {
@@ -169,13 +169,16 @@
 
         function identifyUrl(source, latlng) {
             var b = map.getBounds(), s = map.getSize();
-            return source.url + '?' + [
+            var params = [
                 'geometry=' + latlng.lng + ',' + latlng.lat,
-                'geometryType=esriGeometryPoint', 'sr=4326', 'layers=all', 'tolerance=10',
+                'geometryType=esriGeometryPoint', 'sr=4326',
+                'layers=' + (source.layers || 'all'),
+                'tolerance=' + (source.tolerance || '10'),
                 'mapExtent=' + [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].join(','),
                 'imageDisplay=' + s.x + ',' + s.y + ',96',
                 'returnGeometry=false', 'f=json'
-            ].join('&');
+            ];
+            return source.url + '?' + params.join('&');
         }
 
         function fetchJson(url) {
@@ -197,7 +200,8 @@
             return null;
         }
 
-        function buildPopup(data) {
+        function buildPopup(data, errors) {
+            errors = errors || {};
             var html = '<div class="fi">';
             var hasType = false, hasCat = false;
 
@@ -287,6 +291,14 @@
                 html += '<p class="error">No data here.<br>Zoom in and tap a forest or geological area.</p>';
             }
 
+            // Show errors for debugging
+            var errKeys = Object.keys(errors);
+            if (errKeys.length > 0) {
+                html += '<div style="margin-top:6px;font-size:11px;color:#c00;">';
+                errKeys.forEach(function(k) { html += k + ': ' + errors[k] + '<br>'; });
+                html += '</div>';
+            }
+
             html += '</div>';
             return html;
         }
@@ -297,14 +309,23 @@
                 .setContent('<div class="fi"><p class="loading">Loading...</p></div>')
                 .openOn(map);
 
-            var data = {}, done = 0;
+            var data = {}, errors = {}, done = 0;
             identifySources.forEach(function(src) {
-                fetchJson(identifyUrl(src, e.latlng))
-                    .then(function(j) { data[src.key] = j; })
-                    .catch(function() { data[src.key] = null; })
+                var url = identifyUrl(src, e.latlng);
+                console.log('[identify] ' + src.key + ':', url);
+                fetchJson(url)
+                    .then(function(j) {
+                        console.log('[identify] ' + src.key + ' result:', j);
+                        data[src.key] = j;
+                    })
+                    .catch(function(err) {
+                        console.error('[identify] ' + src.key + ' FAILED:', err);
+                        data[src.key] = null;
+                        errors[src.key] = err.message || 'failed';
+                    })
                     .finally(function() {
                         if (++done === identifySources.length)
-                            popup.setContent(buildPopup(data));
+                            popup.setContent(buildPopup(data, errors));
                     });
             });
         });
