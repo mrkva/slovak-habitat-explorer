@@ -113,6 +113,7 @@ def query_features(source_url, bbox, fields, simplify=MAX_OFFSET):
     west, south, east, north = bbox
     all_features = []
     result_offset = 0
+    first_request = True
 
     while True:
         params = {
@@ -125,11 +126,15 @@ def query_features(source_url, bbox, fields, simplify=MAX_OFFSET):
             'returnGeometry': 'true',
             'outSR': '4326',
             'maxAllowableOffset': str(simplify),
-            'resultOffset': str(result_offset),
             'f': 'json',
         }
+        # Only add resultOffset for pagination (some servers reject it)
+        if not first_request:
+            params['resultOffset'] = str(result_offset)
+
         url = source_url + '?' + urllib.parse.urlencode(params)
         data = fetch_json(url)
+        first_request = False
 
         if not data:
             break
@@ -144,7 +149,7 @@ def query_features(source_url, bbox, fields, simplify=MAX_OFFSET):
         else:
             break
 
-    return {'features': all_features} if all_features else None
+    return {'features': all_features, 'fieldAliases': data.get('fieldAliases', {})} if all_features else None
 
 
 def arcgis_to_geojson(data):
