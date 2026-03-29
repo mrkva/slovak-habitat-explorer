@@ -154,9 +154,9 @@ def query_features(source_url, bbox, fields, simplify=MAX_OFFSET):
         else:
             break
 
-    if all_features and last_data:
+    if last_data is not None:
         return {'features': all_features, 'fieldAliases': last_data.get('fieldAliases', {})}
-    return None
+    return None  # actual error (network/API failure)
 
 
 def arcgis_to_geojson(data):
