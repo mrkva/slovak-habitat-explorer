@@ -59,6 +59,22 @@ self.addEventListener('fetch', function(e) {
 
     if (url.indexOf('corsproxy.io') !== -1) return;
 
+    // Data tiles (GeoJSON): cache-first
+    if (url.indexOf('/data/') !== -1 && url.indexOf('.json') !== -1) {
+        e.respondWith(
+            caches.open(CACHE_DATA).then(function(cache) {
+                return cache.match(e.request).then(function(cached) {
+                    if (cached) return cached;
+                    return fetch(e.request).then(function(response) {
+                        if (response.ok) cache.put(e.request, response.clone());
+                        return response;
+                    });
+                });
+            })
+        );
+        return;
+    }
+
     // Tiles: cache-first, network fallback
     if (isTileRequest(url)) {
         e.respondWith(

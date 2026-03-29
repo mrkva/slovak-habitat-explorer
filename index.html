@@ -262,6 +262,55 @@
             return null;
         }
 
+        var DATA_TILE_ZOOM = 12;
+
+        function pointInPolygon(point, ring) {
+            var x = point[0], y = point[1], inside = false;
+            for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+                var xi = ring[i][0], yi = ring[i][1];
+                var xj = ring[j][0], yj = ring[j][1];
+                if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi))
+                    inside = !inside;
+            }
+            return inside;
+        }
+
+        function findFeatureAtPoint(geojson, latlng) {
+            if (!geojson || !geojson.features) return null;
+            var pt = [latlng.lng, latlng.lat];
+            for (var i = 0; i < geojson.features.length; i++) {
+                var f = geojson.features[i];
+                var coords = f.geometry && f.geometry.coordinates;
+                if (!coords || !coords[0]) continue;
+                // Check outer ring, exclude holes
+                if (pointInPolygon(pt, coords[0])) {
+                    var inHole = false;
+                    for (var h = 1; h < coords.length; h++) {
+                        if (pointInPolygon(pt, coords[h])) { inHole = true; break; }
+                    }
+                    if (!inHole) return f;
+                }
+            }
+            return null;
+        }
+
+        function dataTileUrl(sourceKey, latlng) {
+            var tile = latLngToTile(latlng, DATA_TILE_ZOOM);
+            return './data/' + sourceKey + '/' + DATA_TILE_ZOOM + '/' + tile.x + '/' + tile.y + '.json';
+        }
+
+        // Try data tile first (works offline), fall back to live identify
+        function querySource(src, latlng) {
+            return fetchJson(dataTileUrl(src.key, latlng)).then(function(geojson) {
+                var feature = findFeatureAtPoint(geojson, latlng);
+                if (feature) return { results: [{ attributes: feature.properties }] };
+                return { results: [] };
+            }).catch(function() {
+                // Data tile not available, fall back to live identify
+                return fetchJson(identifyUrl(src, latlng));
+            });
+        }
+
         var identifyCache = {};
         function cacheKey(srcKey, latlng) {
             return srcKey + ':' + (Math.round(latlng.lat * 1000) / 1000) + ',' + (Math.round(latlng.lng * 1000) / 1000);
@@ -352,7 +401,7 @@
                     if (++done === total) popup.setContent(buildPopup(data));
                     return;
                 }
-                fetchJson(identifyUrl(src, e.latlng))
+                querySource(src, e.latlng)
                     .then(function(j) {
                         data[src.key] = j;
                         identifyCache[ck] = j;
@@ -384,32 +433,26 @@
                 }
             }
 
+            // Collect data tile URLs for visible area
             var forestActive = isGroupActive('forest');
             var geoActive = isGroupActive('geology');
-            var gridStep = 0.01;
-            var identifyUrls = [];
-            var startLat = Math.floor(b.getSouth() * 100) / 100;
-            var startLng = Math.floor(b.getWest() * 100) / 100;
-            for (var lat = startLat; lat <= b.getNorth(); lat += gridStep) {
-                for (var lng = startLng; lng <= b.getEast(); lng += gridStep) {
-                    var ll = L.latLng(lat, lng);
+            var dataTileUrls = [];
+            // Find all z12 data tiles that cover the visible area
+            var tMin = latLngToTile(b.getSouthWest(), DATA_TILE_ZOOM);
+            var tMax = latLngToTile(b.getNorthEast(), DATA_TILE_ZOOM);
+            for (var tx = tMin.x; tx <= tMax.x; tx++) {
+                for (var ty = tMax.y; ty <= tMin.y; ty++) {
                     identifySources.forEach(function(src) {
                         if (src.group === 'forest' && !forestActive) return;
                         if (src.group === 'geology' && !geoActive) return;
-                        identifyUrls.push(identifyUrl(src, ll));
+                        dataTileUrls.push('./data/' + src.key + '/' + DATA_TILE_ZOOM + '/' + tx + '/' + ty + '.json');
                     });
                 }
             }
 
-            var total = urls.length + identifyUrls.length;
+            var total = urls.length + dataTileUrls.length;
             var loaded = 0;
             progress.textContent = 'Caching 0/' + total + '...';
-
-            if (total > 10000) {
-                progress.textContent = 'Area too large (' + total + ' items). Zoom in more.';
-                setTimeout(function() { progress.style.display = 'none'; }, 3000);
-                return;
-            }
 
             function tick() {
                 loaded++;
@@ -425,21 +468,9 @@
                         return tileCache.add(u).catch(function() {}).then(tick);
                     })).then(nextTile);
                 }
-                function normalizeIdentifyUrl(url) {
-                    var n = url.replace(/[&?]mapExtent=[^&]*/g, '').replace(/[&?]imageDisplay=[^&]*/g, '');
-                    return n.replace(/geometry=([^&]+)/, function(m, coords) {
-                        var p = coords.split(',');
-                        if (p.length === 2) {
-                            var lng = (Math.round(parseFloat(p[0]) * 100) / 100).toFixed(2);
-                            var lat = (Math.round(parseFloat(p[1]) * 100) / 100).toFixed(2);
-                            return 'geometry=' + lng + ',' + lat;
-                        }
-                        return m;
-                    });
-                }
                 function cacheData() {
-                    progress.textContent = loaded + '/' + total + ' \u2014 caching data...';
-                    var dq = identifyUrls.slice();
+                    progress.textContent = loaded + '/' + total + ' \u2014 caching data tiles...';
+                    var dq = dataTileUrls.slice();
                     function nextData() {
                         if (dq.length === 0) {
                             progress.textContent = 'Done! ' + total + ' items saved.';
@@ -449,12 +480,8 @@
                         var chunk = dq.splice(0, 4);
                         return Promise.all(chunk.map(function(u) {
                             return caches.open('habitat-data-v1').then(function(cache) {
-                                var cacheUrl = normalizeIdentifyUrl(u);
-                                return fetchJson(u).then(function(json) {
-                                    var resp = new Response(JSON.stringify(json), {
-                                        headers: { 'Content-Type': 'application/json' }
-                                    });
-                                    return cache.put(new Request(cacheUrl), resp);
+                                return fetch(u).then(function(r) {
+                                    if (r.ok) return cache.put(u, r);
                                 }).catch(function() {});
                             }).then(tick);
                         })).then(nextData);
