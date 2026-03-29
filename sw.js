@@ -38,13 +38,15 @@ self.addEventListener('fetch', function(e) {
 
     // Identify API: network-first, cache for offline
     if (url.indexOf('/identify?') !== -1 || (url.indexOf('corsproxy.io') !== -1 && url.indexOf('identify') !== -1)) {
+        var cacheUrl = normalizeIdentifyUrl(url);
+        var cacheReq = new Request(cacheUrl);
         e.respondWith(
             caches.open(CACHE_DATA).then(function(cache) {
                 return fetch(e.request).then(function(response) {
-                    if (response.ok) cache.put(e.request, response.clone());
+                    if (response.ok) cache.put(cacheReq, response.clone());
                     return response;
                 }).catch(function() {
-                    return cache.match(e.request).then(function(cached) {
+                    return cache.match(cacheReq).then(function(cached) {
                         return cached || new Response('{"results":[]}', {
                             headers: { 'Content-Type': 'application/json' }
                         });
@@ -100,6 +102,11 @@ self.addEventListener('fetch', function(e) {
         );
     }
 });
+
+function normalizeIdentifyUrl(url) {
+    // Strip viewport-dependent params so cached data matches regardless of pan/zoom
+    return url.replace(/[&?]mapExtent=[^&]*/g, '').replace(/[&?]imageDisplay=[^&]*/g, '');
+}
 
 function isTileRequest(url) {
     return url.indexOf('tile.openstreetmap.org') !== -1

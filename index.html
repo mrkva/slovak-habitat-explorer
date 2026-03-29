@@ -423,6 +423,9 @@
                         return tileCache.add(u).catch(function() {}).then(tick);
                     })).then(nextTile);
                 }
+                function normalizeIdentifyUrl(url) {
+                    return url.replace(/[&?]mapExtent=[^&]*/g, '').replace(/[&?]imageDisplay=[^&]*/g, '');
+                }
                 function cacheData() {
                     progress.textContent = loaded + '/' + total + ' \u2014 caching data...';
                     var dq = identifyUrls.slice();
@@ -434,7 +437,15 @@
                         }
                         var chunk = dq.splice(0, 4);
                         return Promise.all(chunk.map(function(u) {
-                            return fetchJson(u).catch(function() {}).then(tick);
+                            return caches.open('habitat-data-v1').then(function(cache) {
+                                var cacheUrl = normalizeIdentifyUrl(u);
+                                return fetchJson(u).then(function(json) {
+                                    var resp = new Response(JSON.stringify(json), {
+                                        headers: { 'Content-Type': 'application/json' }
+                                    });
+                                    return cache.put(new Request(cacheUrl), resp);
+                                }).catch(function() {});
+                            }).then(tick);
                         })).then(nextData);
                     }
                     return nextData();
