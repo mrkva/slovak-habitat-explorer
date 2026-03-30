@@ -536,19 +536,18 @@
 
         function checkDataCache() {
             caches.open('habitat-data-v2').then(function(cache) {
-                // Sample ~100 tiles spread across the full set
-                var step = Math.max(1, Math.floor(allDataTileUrls.length / 100));
-                var sample = [];
-                for (var i = 0; i < allDataTileUrls.length; i += step) {
-                    sample.push(allDataTileUrls[i]);
-                }
-                return Promise.all(sample.map(function(u) {
-                    return cache.match(u).then(function(r) { return r ? 1 : 0; });
-                })).then(function(results) {
-                    var cached = results.reduce(function(a, b) { return a + b; }, 0);
-                    if (cached > sample.length * 0.8) {
-                        downloadBtn.textContent = 'Data ready \u2713';
-                        downloadBtn.style.background = '#555';
+                return cache.keys().then(function(keys) {
+                    if (keys.length > allDataTileUrls.length * 0.7) {
+                        if (navigator.storage && navigator.storage.estimate) {
+                            navigator.storage.estimate().then(function(est) {
+                                var mb = (est.usage / 1048576).toFixed(0);
+                                downloadBtn.textContent = 'Data ready (' + mb + ' MB) \u2713';
+                                downloadBtn.style.background = '#555';
+                            });
+                        } else {
+                            downloadBtn.textContent = 'Data ready \u2713';
+                            downloadBtn.style.background = '#555';
+                        }
                     }
                 });
             });
@@ -581,15 +580,18 @@
             var total = allUrls.length;
             var loaded = 0;
             var failed = 0;
-            status.textContent = '0 / ' + total;
+            var bytes = 0;
+            status.textContent = 'Starting...';
             bar.style.width = '0%';
+
+            function mb(b) { return (b / 1048576).toFixed(1); }
 
             caches.open('habitat-data-v2').then(function(cache) {
                 var queue = allUrls.slice();
                 function next() {
                     if (queue.length === 0) {
-                        var msg = 'Done! ' + loaded + ' tiles cached.';
-                        if (failed > 0) msg += ' (' + failed + ' not yet available)';
+                        var msg = 'Done! ' + mb(bytes) + ' MB cached.';
+                        if (failed > 0) msg += ' (' + failed + ' unavailable)';
                         status.textContent = msg;
                         bar.style.width = '100%';
                         downloadBtn.textContent = 'Data ready \u2713';
@@ -602,10 +604,11 @@
                         return cache.match(u).then(function(cached) {
                             if (cached) { loaded++; return; }
                             return fetch(u).then(function(r) {
+                                var clone = r.clone();
                                 if (r.ok) {
+                                    clone.arrayBuffer().then(function(buf) { bytes += buf.byteLength; });
                                     cache.put(u, r); loaded++;
                                 } else {
-                                    // Cache empty GeoJSON for 404s (tile has no data in this area)
                                     cache.put(u, new Response('{"type":"FeatureCollection","features":[]}',
                                         { headers: { 'Content-Type': 'application/json' } }));
                                     loaded++;
@@ -616,7 +619,7 @@
                         var done = loaded + failed;
                         var pct = Math.round(done / total * 100);
                         bar.style.width = pct + '%';
-                        status.textContent = done + ' / ' + total;
+                        status.textContent = pct + '% \u2014 ' + mb(bytes) + ' MB';
                         return next();
                     });
                 }
