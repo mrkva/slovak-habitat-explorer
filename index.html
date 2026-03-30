@@ -658,48 +658,6 @@
             }
         }
 
-        // Build sets of valid URLs for cache cleanup (lazy, built once)
-        var _validUrls;
-        function getValidUrls() {
-            if (_validUrls) return _validUrls;
-            var urls = getAllUrls();
-            var origin = location.origin + location.pathname.replace(/\/[^/]*$/, '/');
-            _validUrls = {};
-            urls.data.forEach(function(u) {
-                var full = u.indexOf('./') === 0 ? origin + u.substring(2) : u;
-                _validUrls[full] = true;
-            });
-            urls.map.forEach(function(u) { _validUrls[u] = true; });
-            return _validUrls;
-        }
-
-        function cleanupCache() {
-            var valid = getValidUrls();
-            var removed = 0;
-
-            function cleanOne(cacheName) {
-                return caches.open(cacheName).then(function(cache) {
-                    return cache.keys().then(function(keys) {
-                        var toDelete = keys.filter(function(req) { return !valid[req.url]; });
-                        // Delete in batches of 50 to avoid overwhelming the browser
-                        function batch(i) {
-                            if (i >= toDelete.length) return;
-                            var chunk = toDelete.slice(i, i + 50);
-                            return Promise.all(chunk.map(function(req) {
-                                removed++;
-                                return cache.delete(req);
-                            })).then(function() { return batch(i + 50); });
-                        }
-                        return batch(0);
-                    });
-                });
-            }
-
-            return cleanOne('habitat-tiles-v2')
-                .then(function() { return cleanOne('habitat-data-v2'); })
-                .then(function() { return removed; });
-        }
-
         updateOfflineInfo();
 
         offlineBtn.addEventListener('click', function() {
@@ -813,18 +771,14 @@
                     var dq = urls.data.slice();
                     function nextData() {
                         if (dq.length === 0) {
-                            status.textContent = 'Cleaning up stale data...';
-                            return cleanupCache().then(function(removed) {
-                                var msg = 'Done! ' + mb(bytes) + ' MB saved';
-                                if (removed > 0) msg += ' (' + removed + ' stale items removed)';
-                                status.textContent = msg;
-                                bar.style.width = '100%';
-                                setTimeout(function() {
-                                    progress.style.display = 'none';
-                                    actions.style.display = 'flex';
-                                    updateOfflineInfo();
-                                }, 3000);
-                            });
+                            status.textContent = 'Done! ' + mb(bytes) + ' MB saved';
+                            bar.style.width = '100%';
+                            setTimeout(function() {
+                                progress.style.display = 'none';
+                                actions.style.display = 'flex';
+                                updateOfflineInfo();
+                            }, 3000);
+                            return;
                         }
                         var chunk = dq.splice(0, 8);
                         return Promise.all(chunk.map(function(u) {
