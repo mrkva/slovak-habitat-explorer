@@ -64,37 +64,43 @@
         .fi .source a { color: #999; text-decoration: none; }
         .fi .source a:hover { text-decoration: underline; color: #666; }
 
-        .save-btn {
-            position: absolute; right: 10px; z-index: 1000;
+        #offline-btn {
+            position: absolute; bottom: 30px; right: 10px; z-index: 1000;
             background: #1a5c1a; color: white; border: none; border-radius: 8px;
             padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
-        .save-btn:active { background: #145214; }
-        #save-area { bottom: 30px; }
-        #download-all { bottom: 72px; background: #2d6b2d; }
-        #download-panel {
-            position: absolute; bottom: 114px; right: 10px; z-index: 1000;
-            background: white; border-radius: 8px; padding: 10px 14px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3); font-size: 12px;
+        #offline-btn:active { background: #145214; }
+        #offline-btn.ready { background: #555; }
+        #offline-panel {
+            position: absolute; bottom: 72px; right: 10px; z-index: 1000;
+            background: white; border-radius: 10px; padding: 14px 16px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.3); font-size: 13px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            display: none; min-width: 200px;
+            display: none; width: 240px;
         }
-        #download-panel .bar-bg {
+        #offline-panel h3 { font-size: 14px; margin: 0 0 8px; color: #333; }
+        #offline-panel .info { font-size: 12px; color: #777; margin-bottom: 10px; }
+        #offline-panel .actions { display: flex; flex-direction: column; gap: 8px; }
+        #offline-panel button {
+            padding: 10px; border: none; border-radius: 6px;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            font-family: inherit;
+        }
+        #offline-panel .primary { background: #1a5c1a; color: white; }
+        #offline-panel .primary:active { background: #145214; }
+        #offline-panel .secondary { background: #f3f4f6; color: #333; }
+        #offline-panel .secondary:active { background: #e5e7eb; }
+        #offline-panel .danger { background: none; color: #999; font-size: 12px; font-weight: 400; padding: 6px; }
+        #offline-panel .danger:active { color: #e11; }
+        #offline-panel .bar-bg {
             background: #e5e7eb; border-radius: 4px; height: 8px; margin: 6px 0; overflow: hidden;
         }
-        #download-panel .bar-fill {
-            background: #1a5c1a; height: 100%; width: 0%; transition: width 0.3s;
+        #offline-panel .bar-fill {
+            background: #1a5c1a; height: 100%; width: 0%; transition: width 0.3s; border-radius: 4px;
         }
-        #download-panel .status { color: #555; }
-        #save-progress {
-            position: absolute; bottom: 114px; right: 10px; z-index: 1000;
-            background: white; border-radius: 8px; padding: 8px 14px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3); font-size: 12px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            display: none;
-        }
+        #offline-panel .progress-text { font-size: 12px; color: #555; text-align: center; }
 
         #hint {
             position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000;
@@ -109,13 +115,20 @@
 <body>
     <div id="map"></div>
     <div id="hint">Tap the map to identify habitats</div>
-    <button id="save-area" class="save-btn">Save map tiles</button>
-    <button id="download-all" class="save-btn">Download all data</button>
-    <div id="download-panel">
-        <div class="status" id="download-status">Preparing...</div>
-        <div class="bar-bg"><div class="bar-fill" id="download-bar"></div></div>
+    <button id="offline-btn">Offline</button>
+    <div id="offline-panel">
+        <h3>Offline mode</h3>
+        <div class="info" id="offline-info">Checking...</div>
+        <div class="actions" id="offline-actions">
+            <button class="primary" id="save-this-area">Save this area</button>
+            <button class="secondary" id="save-all-sk">Save all of Slovakia</button>
+            <button class="danger" id="clear-cache">Clear saved data</button>
+        </div>
+        <div id="offline-progress" style="display:none;">
+            <div class="bar-bg"><div class="bar-fill" id="offline-bar"></div></div>
+            <div class="progress-text" id="offline-status"></div>
+        </div>
     </div>
-    <div id="save-progress"></div>
     <div id="opacity-panel">
         <div id="opacity-toggle"><span class="arrow">&#9654;</span> Layer opacity</div>
         <div id="opacity-sliders"></div>
@@ -424,102 +437,47 @@
             });
         });
 
-        document.getElementById('save-area').addEventListener('click', function() {
-            var b = map.getBounds();
-            var zoom = map.getZoom();
-            var minZ = Math.max(zoom - 1, 1);
-            var maxZ = Math.min(zoom + 3, 16);
-            var progress = document.getElementById('save-progress');
-            progress.style.display = 'block';
-
-            var urls = [];
-            for (var z = minZ; z <= maxZ; z++) {
-                var min = latLngToTile(b.getSouthWest(), z);
-                var max = latLngToTile(b.getNorthEast(), z);
-                for (var x = min.x; x <= max.x; x++) {
-                    for (var y = max.y; y <= min.y; y++) {
-                        var sub = ['a','b','c'][(x + y) % 3];
-                        urls.push('https://' + sub + '.tile.openstreetmap.org/' + z + '/' + x + '/' + y + '.png');
-
-                        // Also cache WMS tiles for active overlay layers
-                        layers.forEach(function(l) {
-                            if (!map.hasLayer(l.layer)) return;
-                            var tileUrl = getTileWmsUrl(l.layer, x, y, z);
-                            if (tileUrl) urls.push(tileUrl);
-                        });
-                    }
-                }
-            }
-
-            // Collect data tile URLs for visible area
-            var dataTileUrls = [];
-            var tMin = latLngToTile(b.getSouthWest(), DATA_TILE_ZOOM);
-            var tMax = latLngToTile(b.getNorthEast(), DATA_TILE_ZOOM);
-            for (var tx = tMin.x; tx <= tMax.x; tx++) {
-                for (var ty = tMax.y; ty <= tMin.y; ty++) {
-                    identifySources.forEach(function(src) {
-                        dataTileUrls.push('./data/' + src.key + '/' + DATA_TILE_ZOOM + '/' + tx + '/' + ty + '.json');
-                    });
-                }
-            }
-
-            var total = urls.length + dataTileUrls.length;
-            var loaded = 0;
-            progress.textContent = 'Caching 0/' + total + '...';
-
-            function tick() {
-                loaded++;
-                progress.textContent = 'Caching ' + loaded + '/' + total + '...';
-            }
-
-            caches.open('habitat-tiles-v2').then(function(tileCache) {
-                var queue = urls.slice();
-                function nextTile() {
-                    if (queue.length === 0) return cacheData();
-                    var chunk = queue.splice(0, 6);
-                    return Promise.all(chunk.map(function(u) {
-                        return tileCache.add(u).catch(function() {}).then(tick);
-                    })).then(nextTile);
-                }
-                function cacheData() {
-                    progress.textContent = loaded + '/' + total + ' \u2014 caching data tiles...';
-                    var dq = dataTileUrls.slice();
-                    function nextData() {
-                        if (dq.length === 0) {
-                            progress.textContent = 'Done! ' + total + ' items saved.';
-                            setTimeout(function() { progress.style.display = 'none'; }, 2500);
-                            return;
-                        }
-                        var chunk = dq.splice(0, 4);
-                        return Promise.all(chunk.map(function(u) {
-                            return caches.open('habitat-data-v2').then(function(cache) {
-                                var req = new Request(u);
-                                return cache.match(req).then(function(cached) {
-                                    if (cached) return; // already cached
-                                    return fetch(req).then(function(r) {
-                                        if (r.ok) return cache.put(req, r);
-                                    });
-                                }).catch(function() {});
-                            }).then(tick);
-                        })).then(nextData);
-                    }
-                    return nextData();
-                }
-                return nextTile();
-            });
-        });
+        // Offline panel
+        var offlineBtn = document.getElementById('offline-btn');
+        var offlinePanel = document.getElementById('offline-panel');
+        var panelOpen = false;
+        var SK = { south: 47.73, north: 49.61, west: 16.83, east: 22.57 };
 
         // Request persistent storage so browser won't evict cached data
         if (navigator.storage && navigator.storage.persist) {
             navigator.storage.persist();
         }
 
-        // Check if data tiles are already cached
-        var downloadBtn = document.getElementById('download-all');
-        var allDataTileUrls = (function() {
-            var SK = { south: 47.73, north: 49.61, west: 16.83, east: 22.57 };
-            var sw = L.latLng(SK.south, SK.west);
-            var ne = L.latLng(SK.north, SK.east);
+        function updateOfflineInfo() {
+            var info = document.getElementById('offline-info');
+            if (navigator.storage && navigator.storage.estimate) {
+                navigator.storage.estimate().then(function(est) {
+                    var usedMB = (est.usage / 1048576).toFixed(0);
+                    if (parseInt(usedMB) > 5) {
+                        info.textContent = usedMB + ' MB saved for offline use';
+                        offlineBtn.classList.add('ready');
+                        offlineBtn.textContent = 'Offline (' + usedMB + ' MB)';
+                    } else {
+                        info.textContent = 'No data saved yet';
+                        offlineBtn.classList.remove('ready');
+                        offlineBtn.textContent = 'Offline';
+                    }
+                });
+            } else {
+                info.textContent = '';
+            }
+        }
+        updateOfflineInfo();
+
+        offlineBtn.addEventListener('click', function() {
+            panelOpen = !panelOpen;
+            offlinePanel.style.display = panelOpen ? 'block' : 'none';
+            if (panelOpen) updateOfflineInfo();
+        });
+
+        function getDataTileUrls(bounds) {
+            var sw = L.latLng(bounds.south, bounds.west);
+            var ne = L.latLng(bounds.north, bounds.east);
             var tMin = latLngToTile(sw, DATA_TILE_ZOOM);
             var tMax = latLngToTile(ne, DATA_TILE_ZOOM);
             var sources = ['jprl', 'lestypy', 'geo'];
@@ -532,98 +490,122 @@
                 }
             }
             return urls;
-        })();
-
-        function checkDataCache() {
-            caches.open('habitat-data-v2').then(function(cache) {
-                return cache.keys().then(function(keys) {
-                    if (keys.length > allDataTileUrls.length * 0.7) {
-                        if (navigator.storage && navigator.storage.estimate) {
-                            navigator.storage.estimate().then(function(est) {
-                                var mb = (est.usage / 1048576).toFixed(0);
-                                downloadBtn.textContent = 'Data ready (' + mb + ' MB) \u2713';
-                                downloadBtn.style.background = '#555';
-                            });
-                        } else {
-                            downloadBtn.textContent = 'Data ready \u2713';
-                            downloadBtn.style.background = '#555';
-                        }
-                    }
-                });
-            });
         }
-        checkDataCache();
 
-        downloadBtn.addEventListener('click', function() {
-            var panel = document.getElementById('download-panel');
-            var status = document.getElementById('download-status');
-            var bar = document.getElementById('download-bar');
-            panel.style.display = 'block';
-
-            // Calculate all z12 tiles covering Slovakia
-            var SK = { south: 47.73, north: 49.61, west: 16.83, east: 22.57 };
-            var sw = L.latLng(SK.south, SK.west);
-            var ne = L.latLng(SK.north, SK.east);
-            var tMin = latLngToTile(sw, DATA_TILE_ZOOM);
-            var tMax = latLngToTile(ne, DATA_TILE_ZOOM);
-
-            var sources = ['jprl', 'lestypy', 'geo'];
-            var allUrls = [];
-            for (var tx = tMin.x; tx <= tMax.x; tx++) {
-                for (var ty = tMax.y; ty <= tMin.y; ty++) {
-                    sources.forEach(function(s) {
-                        allUrls.push('./data/' + s + '/' + DATA_TILE_ZOOM + '/' + tx + '/' + ty + '.json');
-                    });
+        function getMapTileUrls(bounds, zoom) {
+            var urls = [];
+            var minZ = Math.max(zoom - 1, 1);
+            var maxZ = Math.min(zoom + 3, 16);
+            for (var z = minZ; z <= maxZ; z++) {
+                var min = latLngToTile(L.latLng(bounds.south, bounds.west), z);
+                var max = latLngToTile(L.latLng(bounds.north, bounds.east), z);
+                for (var x = min.x; x <= max.x; x++) {
+                    for (var y = max.y; y <= min.y; y++) {
+                        var sub = ['a','b','c'][(x + y) % 3];
+                        urls.push('https://' + sub + '.tile.openstreetmap.org/' + z + '/' + x + '/' + y + '.png');
+                        layers.forEach(function(l) {
+                            if (!map.hasLayer(l.layer)) return;
+                            var tileUrl = getTileWmsUrl(l.layer, x, y, z);
+                            if (tileUrl) urls.push(tileUrl);
+                        });
+                    }
                 }
             }
+            return urls;
+        }
 
-            var total = allUrls.length;
-            var loaded = 0;
-            var failed = 0;
-            var bytes = 0;
-            status.textContent = 'Starting...';
+        function runDownload(dataTileUrls, mapTileUrls) {
+            var progress = document.getElementById('offline-progress');
+            var bar = document.getElementById('offline-bar');
+            var status = document.getElementById('offline-status');
+            var actions = document.getElementById('offline-actions');
+            progress.style.display = 'block';
+            actions.style.display = 'none';
             bar.style.width = '0%';
 
+            var total = dataTileUrls.length + mapTileUrls.length;
+            var loaded = 0, failed = 0, bytes = 0;
             function mb(b) { return (b / 1048576).toFixed(1); }
 
-            caches.open('habitat-data-v2').then(function(cache) {
-                var queue = allUrls.slice();
-                function next() {
-                    if (queue.length === 0) {
-                        var msg = 'Done! ' + mb(bytes) + ' MB cached.';
-                        if (failed > 0) msg += ' (' + failed + ' unavailable)';
-                        status.textContent = msg;
-                        bar.style.width = '100%';
-                        downloadBtn.textContent = 'Data ready \u2713';
-                        downloadBtn.style.background = '#555';
-                        setTimeout(function() { panel.style.display = 'none'; }, 4000);
-                        return;
-                    }
-                    var chunk = queue.splice(0, 8);
+            function updateProgress() {
+                var done = loaded + failed;
+                var pct = Math.round(done / total * 100);
+                bar.style.width = pct + '%';
+                status.textContent = pct + '% — ' + mb(bytes) + ' MB';
+            }
+
+            // Download map tiles first, then data tiles
+            caches.open('habitat-tiles-v2').then(function(tileCache) {
+                var mq = mapTileUrls.slice();
+                function nextMap() {
+                    if (mq.length === 0) return downloadData();
+                    var chunk = mq.splice(0, 6);
                     return Promise.all(chunk.map(function(u) {
-                        return cache.match(u).then(function(cached) {
+                        return tileCache.match(u).then(function(cached) {
                             if (cached) { loaded++; return; }
-                            return fetch(u).then(function(r) {
-                                var clone = r.clone();
-                                if (r.ok) {
-                                    clone.arrayBuffer().then(function(buf) { bytes += buf.byteLength; });
-                                    cache.put(u, r); loaded++;
-                                } else {
-                                    cache.put(u, new Response('{"type":"FeatureCollection","features":[]}',
-                                        { headers: { 'Content-Type': 'application/json' } }));
-                                    loaded++;
-                                }
-                            }).catch(function() { failed++; });
+                            return tileCache.add(u).then(function() { loaded++; }).catch(function() { failed++; });
                         });
-                    })).then(function() {
-                        var done = loaded + failed;
-                        var pct = Math.round(done / total * 100);
-                        bar.style.width = pct + '%';
-                        status.textContent = pct + '% \u2014 ' + mb(bytes) + ' MB';
-                        return next();
-                    });
+                    })).then(function() { updateProgress(); return nextMap(); });
                 }
-                return next();
+                return nextMap();
+            });
+
+            function downloadData() {
+                return caches.open('habitat-data-v2').then(function(cache) {
+                    var dq = dataTileUrls.slice();
+                    function nextData() {
+                        if (dq.length === 0) {
+                            var msg = 'Done! ' + mb(bytes) + ' MB saved';
+                            if (failed > 0) msg += ' (' + failed + ' unavailable)';
+                            status.textContent = msg;
+                            bar.style.width = '100%';
+                            setTimeout(function() {
+                                progress.style.display = 'none';
+                                actions.style.display = 'flex';
+                                updateOfflineInfo();
+                            }, 3000);
+                            return;
+                        }
+                        var chunk = dq.splice(0, 8);
+                        return Promise.all(chunk.map(function(u) {
+                            return cache.match(u).then(function(cached) {
+                                if (cached) { loaded++; return; }
+                                return fetch(u).then(function(r) {
+                                    var clone = r.clone();
+                                    if (r.ok) {
+                                        clone.arrayBuffer().then(function(buf) { bytes += buf.byteLength; });
+                                        cache.put(u, r); loaded++;
+                                    } else {
+                                        cache.put(u, new Response('{"type":"FeatureCollection","features":[]}',
+                                            { headers: { 'Content-Type': 'application/json' } }));
+                                        loaded++;
+                                    }
+                                }).catch(function() { failed++; });
+                            });
+                        })).then(function() { updateProgress(); return nextData(); });
+                    }
+                    return nextData();
+                });
+            }
+        }
+
+        document.getElementById('save-this-area').addEventListener('click', function() {
+            var b = map.getBounds();
+            var bounds = { south: b.getSouth(), north: b.getNorth(), west: b.getWest(), east: b.getEast() };
+            runDownload(getDataTileUrls(bounds), getMapTileUrls(bounds, map.getZoom()));
+        });
+
+        document.getElementById('save-all-sk').addEventListener('click', function() {
+            runDownload(getDataTileUrls(SK), []);
+        });
+
+        document.getElementById('clear-cache').addEventListener('click', function() {
+            if (!confirm('Delete all saved offline data?')) return;
+            Promise.all([
+                caches.delete('habitat-tiles-v2'),
+                caches.delete('habitat-data-v2')
+            ]).then(function() {
+                updateOfflineInfo();
             });
         });
 
