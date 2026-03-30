@@ -1,4 +1,4 @@
-var CACHE_SHELL = 'habitat-shell-v8';
+var CACHE_SHELL = 'habitat-shell-v9';
 var CACHE_TILES = 'habitat-tiles-v2';
 var CACHE_DATA = 'habitat-data-v2';
 
@@ -101,36 +101,31 @@ self.addEventListener('fetch', function(e) {
         return;
     }
 
-    // HTML/JSON: network-first with 3s timeout (so PWA launches fast from cache)
-    var isHtml = url.indexOf('.html') !== -1 || url.endsWith('/') || url.indexOf('.json') !== -1;
+    // HTML: cache-first, update in background (stale-while-revalidate)
+    // This ensures instant PWA launch from cache
+    var isHtml = url.indexOf('.html') !== -1 || url.endsWith('/');
     if (isHtml) {
         e.respondWith(
-            new Promise(function(resolve) {
-                var done = false;
-                // Race: network vs 3s timeout
-                var timer = setTimeout(function() {
-                    if (done) return;
-                    done = true;
-                    caches.match(e.request).then(function(cached) {
-                        resolve(cached || fetch(e.request));
-                    });
-                }, 3000);
-                fetch(e.request).then(function(response) {
-                    if (done) return;
-                    done = true;
-                    clearTimeout(timer);
-                    if (response.ok) {
-                        caches.open(CACHE_SHELL).then(function(c) { c.put(e.request, response.clone()); });
-                    }
-                    resolve(response.clone());
-                }).catch(function() {
-                    if (done) return;
-                    done = true;
-                    clearTimeout(timer);
-                    caches.match(e.request).then(function(cached) {
-                        resolve(cached || new Response('Offline', { status: 503 }));
-                    });
+            caches.open(CACHE_SHELL).then(function(cache) {
+                return cache.match(e.request).then(function(cached) {
+                    var fetchPromise = fetch(e.request).then(function(response) {
+                        if (response.ok) cache.put(e.request, response.clone());
+                        return response;
+                    }).catch(function() { return cached; });
+                    return cached || fetchPromise;
                 });
+            })
+        );
+    } else if (url.indexOf('.json') !== -1) {
+        // manifest.json: network-first
+        e.respondWith(
+            fetch(e.request).then(function(response) {
+                if (response.ok) {
+                    caches.open(CACHE_SHELL).then(function(c) { c.put(e.request, response.clone()); });
+                }
+                return response;
+            }).catch(function() {
+                return caches.match(e.request);
             })
         );
     } else {

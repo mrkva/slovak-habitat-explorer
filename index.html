@@ -62,6 +62,7 @@
         .fi .geo-age { font-size: 13px; color: #666; margin-bottom: 6px; }
         .fi .loading { color: #888; font-style: italic; }
         .fi .error { color: #666; }
+        .fi .unavailable { font-size: 12px; color: #b91c1c; font-style: italic; }
         .fi .source { font-size: 11px; color: #aaa; margin-top: 4px; }
         .fi .source a { color: #999; text-decoration: none; }
         .fi .source a:hover { text-decoration: underline; color: #666; }
@@ -429,7 +430,10 @@
             var hasEunis = false, hasForest = false, hasGeo = false;
 
             // EUNIS habitat
-            if (data.eunis) {
+            if (data.eunis && data.eunis._error) {
+                html += '<div class="section"><div class="section-label">Habitat</div>';
+                html += '<div class="unavailable">EEA service unavailable</div></div>';
+            } else if (data.eunis) {
                 var l3 = data.eunis._level3;
                 var ae = (data.eunis.results && data.eunis.results.length > 0) ? data.eunis.results[0].attributes : {};
                 var label = findField(ae, ['Raster.Label', 'Label']);
@@ -449,8 +453,13 @@
                 }
             }
 
+            var forestErr = (data.jprl && data.jprl._error) && (data.lestypy && data.lestypy._error);
+            if (forestErr) {
+                html += '<div class="section"><div class="section-label">Forest</div>';
+                html += '<div class="unavailable">NLC service unavailable</div></div>';
+            }
             var forestHtml = '';
-            if (data.lestypy && data.lestypy.results && data.lestypy.results.length > 0) {
+            if (!forestErr && data.lestypy && data.lestypy.results && data.lestypy.results.length > 0) {
                 var a = data.lestypy.results[0].attributes;
                 var hlavny = findField(a, ['Hlavny_lesny_typ', 'Hlavny lesny typ', 'HLAVNY_LESNY_TYP',
                     'Nazov_lesneho_typu_1', 'Nazov lesneho typu 1', 'NAZOV_LESNEHO_TYPU_1',
@@ -459,7 +468,7 @@
                 if (hlavny) { forestHtml += '<div class="type-name">' + hlavny + '</div>'; hasForest = true; }
                 if (hslt) { forestHtml += '<div class="hslt-name">' + hslt + '</div>'; hasForest = true; }
             }
-            if (data.jprl && data.jprl.results && data.jprl.results.length > 0) {
+            if (!forestErr && data.jprl && data.jprl.results && data.jprl.results.length > 0) {
                 var aj = data.jprl.results[0].attributes;
                 var kl = findField(aj, ['KL', 'kl']);
                 var cat = kl ? categoryLabels[kl] : null;
@@ -473,7 +482,11 @@
                 html += '</div>';
             }
 
-            if (data.geo && data.geo.results && data.geo.results.length > 0) {
+            if (data.geo && data.geo._error) {
+                html += '<div class="section"><div class="section-label">Geology</div>';
+                html += '<div class="unavailable">SG\u00daD\u0160 service unavailable</div></div>';
+                hasGeo = true;
+            } else if (data.geo && data.geo.results && data.geo.results.length > 0) {
                 var geoHtml = '';
                 var seen = {};
                 data.geo.results.forEach(function(r) {
@@ -500,7 +513,7 @@
                 }
             }
 
-            if (!hasEunis && !hasForest && !hasGeo) {
+            if (!hasEunis && !hasForest && !hasGeo && !forestErr) {
                 html += '<p class="error">No data at this location.</p>';
             }
             html += '</div>';
@@ -527,7 +540,7 @@
                         data[src.key] = j;
                         identifyCache[ck] = j;
                     })
-                    .catch(function() { data[src.key] = null; })
+                    .catch(function() { data[src.key] = { _error: true }; })
                     .finally(function() {
                         if (++done === total) popup.setContent(buildPopup(data));
                     });
