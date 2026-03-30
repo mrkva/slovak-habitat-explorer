@@ -1,6 +1,6 @@
-var CACHE_SHELL = 'habitat-shell-v1';
-var CACHE_TILES = 'habitat-tiles-v1';
-var CACHE_DATA = 'habitat-data-v1';
+var CACHE_SHELL = 'habitat-shell-v2';
+var CACHE_TILES = 'habitat-tiles-v2';
+var CACHE_DATA = 'habitat-data-v2';
 
 var SHELL_FILES = [
     './',

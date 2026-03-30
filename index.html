@@ -327,12 +327,10 @@
                 if (!r.ok) throw new Error(r.status);
                 return r.json();
             }).then(function(geojson) {
-                console.log('[data-tile]', src.key, tileUrl, geojson.features.length, 'features');
                 var feature = findFeatureAtPoint(geojson, latlng);
                 if (feature) return { results: [{ attributes: feature.properties }] };
                 return { results: [] };
-            }).catch(function(err) {
-                console.warn('[data-tile] miss', src.key, tileUrl, err);
+            }).catch(function() {
                 // Data tile not available, fall back to live identify
                 return fetchJson(identifyUrl(src, latlng));
             });
@@ -486,7 +484,7 @@
                 progress.textContent = 'Caching ' + loaded + '/' + total + '...';
             }
 
-            caches.open('habitat-tiles-v1').then(function(tileCache) {
+            caches.open('habitat-tiles-v2').then(function(tileCache) {
                 var queue = urls.slice();
                 function nextTile() {
                     if (queue.length === 0) return cacheData();
@@ -506,7 +504,7 @@
                         }
                         var chunk = dq.splice(0, 4);
                         return Promise.all(chunk.map(function(u) {
-                            return caches.open('habitat-data-v1').then(function(cache) {
+                            return caches.open('habitat-data-v2').then(function(cache) {
                                 var req = new Request(u);
                                 return cache.match(req).then(function(cached) {
                                     if (cached) return; // already cached
@@ -557,7 +555,7 @@
             status.textContent = '0 / ' + total;
             bar.style.width = '0%';
 
-            caches.open('habitat-data-v1').then(function(cache) {
+            caches.open('habitat-data-v2').then(function(cache) {
                 var queue = allUrls.slice();
                 function next() {
                     if (queue.length === 0) {
