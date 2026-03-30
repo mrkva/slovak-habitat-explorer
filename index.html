@@ -454,6 +454,13 @@
                     for (var y = max.y; y <= min.y; y++) {
                         var sub = ['a','b','c'][(x + y) % 3];
                         urls.push('https://' + sub + '.tile.openstreetmap.org/' + z + '/' + x + '/' + y + '.png');
+
+                        // Also cache WMS tiles for active overlay layers
+                        layers.forEach(function(l) {
+                            if (!map.hasLayer(l.layer)) return;
+                            var tileUrl = getTileWmsUrl(l.layer, x, y, z);
+                            if (tileUrl) urls.push(tileUrl);
+                        });
                     }
                 }
             }
@@ -586,6 +593,31 @@
                 return next();
             });
         });
+
+        function tileBounds(x, y, z) {
+            var n = Math.pow(2, z);
+            var lng1 = x / n * 360 - 180;
+            var lng2 = (x + 1) / n * 360 - 180;
+            var lat1 = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 1) / n))) * 180 / Math.PI;
+            var lat2 = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) * 180 / Math.PI;
+            return [lng1, lat1, lng2, lat2];
+        }
+
+        function getTileWmsUrl(wmsLayer, x, y, z) {
+            var o = wmsLayer.wmsParams;
+            if (!o) return null;
+            var bb = tileBounds(x, y, z);
+            var v = o.version || '1.1.1';
+            var bboxParam = v >= '1.3' ? (bb[1]+','+bb[0]+','+bb[3]+','+bb[2]) : bb.join(',');
+            var crs = v >= '1.3' ? 'CRS=EPSG:4326' : 'SRS=EPSG:4326';
+            return wmsLayer._url + '?SERVICE=WMS&REQUEST=GetMap'
+                + '&LAYERS=' + encodeURIComponent(o.layers)
+                + '&STYLES=&FORMAT=' + encodeURIComponent(o.format || 'image/png')
+                + '&TRANSPARENT=' + (o.transparent !== false ? 'TRUE' : 'FALSE')
+                + '&VERSION=' + v + '&' + crs
+                + '&BBOX=' + bboxParam
+                + '&WIDTH=256&HEIGHT=256';
+        }
 
         function latLngToTile(latlng, zoom) {
             var lat = latlng.lat * Math.PI / 180;
