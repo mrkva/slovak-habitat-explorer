@@ -467,50 +467,55 @@
             }
         }
 
-        // Build sets of valid URLs for cache cleanup
-        var validUrls = (function() {
+        // Build sets of valid URLs for cache cleanup (lazy, built once)
+        var _validUrls;
+        function getValidUrls() {
+            if (_validUrls) return _validUrls;
             var urls = getAllUrls();
             var origin = location.origin + location.pathname.replace(/\/[^/]*$/, '/');
-            var set = {};
-            // Normalize data tile URLs to full absolute URLs (as stored in cache)
+            _validUrls = {};
             urls.data.forEach(function(u) {
                 var full = u.indexOf('./') === 0 ? origin + u.substring(2) : u;
-                set[full] = true;
+                _validUrls[full] = true;
             });
-            urls.map.forEach(function(u) { set[u] = true; });
-            return set;
-        })();
-
-        function cleanupCache() {
-            var removed = 0;
-            return Promise.all([
-                caches.open('habitat-tiles-v2').then(function(cache) {
-                    return cache.keys().then(function(keys) {
-                        return Promise.all(keys.map(function(req) {
-                            if (!validUrls[req.url]) {
-                                removed++;
-                                return cache.delete(req);
-                            }
-                        }));
-                    });
-                }),
-                caches.open('habitat-data-v2').then(function(cache) {
-                    return cache.keys().then(function(keys) {
-                        return Promise.all(keys.map(function(req) {
-                            if (!validUrls[req.url]) {
-                                removed++;
-                                return cache.delete(req);
-                            }
-                        }));
-                    });
-                })
-            ]).then(function() { return removed; });
+            urls.map.forEach(function(u) { _validUrls[u] = true; });
+            return _validUrls;
         }
 
-        // Run cleanup once on load, then update info
+        function cleanupCache() {
+            var valid = getValidUrls();
+            var removed = 0;
+
+            function cleanOne(cacheName) {
+                return caches.open(cacheName).then(function(cache) {
+                    return cache.keys().then(function(keys) {
+                        var toDelete = keys.filter(function(req) { return !valid[req.url]; });
+                        // Delete in batches of 50 to avoid overwhelming the browser
+                        function batch(i) {
+                            if (i >= toDelete.length) return;
+                            var chunk = toDelete.slice(i, i + 50);
+                            return Promise.all(chunk.map(function(req) {
+                                removed++;
+                                return cache.delete(req);
+                            })).then(function() { return batch(i + 50); });
+                        }
+                        return batch(0);
+                    });
+                });
+            }
+
+            return cleanOne('habitat-tiles-v2')
+                .then(function() { return cleanOne('habitat-data-v2'); })
+                .then(function() { return removed; });
+        }
+
+        // Show initial state, then run cleanup in background
+        updateOfflineInfo();
         cleanupCache().then(function(removed) {
-            if (removed > 0) console.log('Cache cleanup: removed ' + removed + ' stale entries');
-            updateOfflineInfo();
+            if (removed > 0) {
+                console.log('Cache cleanup: removed ' + removed + ' stale entries');
+                updateOfflineInfo();
+            }
         });
 
         offlineBtn.addEventListener('click', function() {
