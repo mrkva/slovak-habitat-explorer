@@ -1,4 +1,4 @@
-var CACHE_SHELL = 'habitat-shell-v9';
+var CACHE_SHELL = 'habitat-shell-v10';
 var CACHE_TILES = 'habitat-tiles-v2';
 var CACHE_DATA = 'habitat-data-v2';
 
@@ -14,10 +14,15 @@ self.addEventListener('install', function(e) {
     e.waitUntil(
         caches.open(CACHE_SHELL).then(function(cache) {
             return cache.addAll(SHELL_FILES);
-        }).then(function() {
-            return self.skipWaiting();
         })
     );
+});
+
+// Skip waiting when prompted by the page (update banner tap)
+self.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
 });
 
 self.addEventListener('activate', function(e) {
