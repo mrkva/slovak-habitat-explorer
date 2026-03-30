@@ -41,7 +41,7 @@ EMPTY_MANIFEST = '.empty_tiles'
 SOURCES = {
     'jprl': {
         'url': 'https://gis.nlcsk.org/arcgis/rest/services/MPRV/JPRL_ZBGIS/MapServer/1/query',
-        'fields': 'KL,Plocha,OBJECTID',
+        'fields': 'KL,Plocha,Vek_porastu,OBJECTID',
         'group': 'forest',
     },
     'lestypy': {
@@ -210,7 +210,7 @@ def save_empty_set(source_dir, empty_set):
         f.write('\n'.join(sorted(empty_set)))
 
 
-def generate_source(name, source, num_workers=4):
+def generate_source(name, source, num_workers=4, force=False):
     """Generate all tiles for a single data source using parallel workers."""
     tiles = get_tiles()
     out_dir = os.path.join(OUTPUT_DIR, name, str(ZOOM))
@@ -218,7 +218,7 @@ def generate_source(name, source, num_workers=4):
 
     # Load known empty tiles for resume
     source_dir = os.path.join(OUTPUT_DIR, name)
-    empty_set = load_empty_set(source_dir)
+    empty_set = load_empty_set(source_dir) if not force else set()
 
     # Filter to tiles that need work
     todo = []
@@ -226,9 +226,9 @@ def generate_source(name, source, num_workers=4):
     for (x, y) in tiles:
         tile_key = f'{x}/{y}'
         tile_path = os.path.join(out_dir, str(x), f'{y}.json')
-        if os.path.exists(tile_path):
+        if not force and os.path.exists(tile_path):
             skipped += 1
-        elif tile_key in empty_set:
+        elif not force and tile_key in empty_set:
             skipped += 1
         else:
             todo.append((x, y))
@@ -316,6 +316,8 @@ def main():
                         help='Number of parallel workers (default: 4)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Show tile count without fetching')
+    parser.add_argument('--force', action='store_true',
+                        help='Re-download all tiles (ignore existing)')
     args = parser.parse_args()
 
     tiles = get_tiles()
@@ -331,7 +333,7 @@ def main():
     total_saved = 0
 
     for name, source in sources.items():
-        total_saved += generate_source(name, source, num_workers=args.workers)
+        total_saved += generate_source(name, source, num_workers=args.workers, force=args.force)
 
     print(f"\nAll done! {total_saved} tiles generated in {OUTPUT_DIR}/")
 

@@ -519,13 +519,14 @@
                 var label = findField(ae, ['Raster.Label', 'Label']);
                 if (l3 || label) {
                     html += '<div class="section"><div class="section-label">Habitat</div>';
-                    if (l3) {
-                        html += '<div class="eunis-label">' + l3.code + ' - ' + l3.name + '</div>';
-                        if (label) html += '<div class="eunis-l1">' + label + '</div>';
-                    } else {
+                    // Show Level 2 as primary, Level 3 as detail only if it refines the same category
+                    if (label) {
                         html += '<div class="eunis-label">' + label + '</div>';
-                        var l1 = findField(ae, ['Raster.EUNIS_L1', 'EUNIS_L1']);
-                        if (l1) html += '<div class="eunis-l1">' + l1 + '</div>';
+                        if (l3 && label.charAt(0) === l3.code.charAt(0)) {
+                            html += '<div class="eunis-l1">' + l3.code + ' - ' + l3.name + '</div>';
+                        }
+                    } else if (l3) {
+                        html += '<div class="eunis-label">' + l3.code + ' - ' + l3.name + '</div>';
                     }
                     html += '<div class="source">Source: <a href="https://www.eea.europa.eu" target="_blank">EEA</a></div>';
                     html += '</div>';
