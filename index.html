@@ -763,14 +763,18 @@
                     var dq = urls.data.slice();
                     function nextData() {
                         if (dq.length === 0) {
-                            status.textContent = 'Done! ' + mb(bytes) + ' MB saved';
-                            bar.style.width = '100%';
-                            setTimeout(function() {
-                                progress.style.display = 'none';
-                                actions.style.display = 'flex';
-                                updateOfflineInfo();
-                            }, 3000);
-                            return;
+                            status.textContent = 'Cleaning up stale data...';
+                            return cleanupCache().then(function(removed) {
+                                var msg = 'Done! ' + mb(bytes) + ' MB saved';
+                                if (removed > 0) msg += ' (' + removed + ' stale items removed)';
+                                status.textContent = msg;
+                                bar.style.width = '100%';
+                                setTimeout(function() {
+                                    progress.style.display = 'none';
+                                    actions.style.display = 'flex';
+                                    updateOfflineInfo();
+                                }, 3000);
+                            });
                         }
                         var chunk = dq.splice(0, 8);
                         return Promise.all(chunk.map(function(u) {
