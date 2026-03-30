@@ -594,11 +594,12 @@
 
         // Show initial state, then run cleanup in background
         updateOfflineInfo();
+        offlineBtn.style.opacity = '0.6';
+        offlineBtn.textContent = 'Offline...';
         cleanupCache().then(function(removed) {
-            if (removed > 0) {
-                console.log('Cache cleanup: removed ' + removed + ' stale entries');
-                updateOfflineInfo();
-            }
+            offlineBtn.style.opacity = '1';
+            if (removed > 0) console.log('Cache cleanup: removed ' + removed + ' stale entries');
+            updateOfflineInfo();
         });
 
         offlineBtn.addEventListener('click', function() {
