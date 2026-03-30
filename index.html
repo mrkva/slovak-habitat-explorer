@@ -341,40 +341,11 @@
             return './data/' + sourceKey + '/' + DATA_TILE_ZOOM + '/' + tile.x + '/' + tile.y + '.json';
         }
 
-        // EUNIS pixel value → label lookup (for offline raster tiles)
-        var EUNIS_LABELS = {
-            0:'No data',11:'E1 - Dry grasslands',12:'E2 - Mesic grasslands',13:'E3 - Seasonally wet and wet grasslands',
-            14:'E4 - Alpine and subalpine grasslands',15:'E5 - Woodland fringes and clearings and tall forb stands',
-            16:'E6 - Inland salt steppes',17:'E7 - Sparsely wooded grasslands',
-            21:'F2 - Arctic, alpine and subalpine scrub',22:'F3 - Temperate and mediterranean-montane scrub',
-            23:'F4 - Temperate shrub heathland',24:'F5 - Maquis, arborescent matorral and thermo-Mediterranean brushes',
-            25:'F6 - Garrigue',26:'F7 - Spiny Mediterranean heaths',27:'F9 - Riverine and fen scrubs',
-            28:'FA - Hedgerows',29:'FB - Shrub plantations',
-            31:'G1 - Broadleaved deciduous woodland',32:'G2 - Broadleaved evergreen woodland',
-            33:'G3 - Coniferous woodland',34:'G4 - Mixed deciduous and coniferous woodland',
-            35:'G5 - Lines of trees, small anthropogenic woodlands, recently felled woodland, early-stage woodland',
-            41:'H2 - Screes',42:'H3 - Inland cliffs, rock pavements and outcrops',43:'H5 - Miscellaneous inland habitats with very sparse or no vegetation',
-            51:'J1 - Buildings of cities, towns and villages',52:'J2 - Low density buildings',
-            53:'J3 - Extractive industrial sites',54:'J4 - Transport networks and other constructed hard-surfaced areas',
-            55:'J5 - Highly artificial man-made waters and associated structures',56:'J6 - Waste deposits',
-            61:'C1 - Surface standing waters',62:'C2 - Surface running waters',63:'C3 - Littoral zone of inland surface waterbodies',
-            71:'D1 - Raised and blanket bogs',72:'D2 - Valley mires, poor fens and transition mires',
-            73:'D4 - Base-rich fens and calcareous spring mires',74:'D5 - Sedge and reedbeds, normally without free-standing water',
-            81:'I1 - Arable land and market gardens',82:'I2 - Cultivated areas of gardens and parks',
-            91:'V - Marine habitats (in terrestrial dataset)',
-            54:'J1 - Buildings of cities, towns and villages'
-        };
-
         // Try data tile first (works offline), fall back to live identify
         function querySource(src, latlng) {
-            // EUNIS raster tiles: read pixel value from cached PNG
+            // EUNIS has no vector data tiles — go straight to live identify
             if (src.key === 'eunis') {
-                return queryEunisOffline(latlng).then(function(result) {
-                    if (result) return result;
-                    return fetchJson(identifyUrl(src, latlng));
-                }).catch(function() {
-                    return fetchJson(identifyUrl(src, latlng));
-                });
+                return fetchJson(identifyUrl(src, latlng));
             }
             var tileUrl = dataTileUrl(src.key, latlng);
             return fetch(tileUrl).then(function(r) {
@@ -386,54 +357,6 @@
                 return { results: [] };
             }).catch(function() {
                 return fetchJson(identifyUrl(src, latlng));
-            });
-        }
-
-        // Read EUNIS raster tile (PNG) and look up pixel value
-        function queryEunisOffline(latlng) {
-            var tile = latLngToTile(latlng, DATA_TILE_ZOOM);
-            var tileUrl = './data/eunis/' + DATA_TILE_ZOOM + '/' + tile.x + '/' + tile.y + '.png';
-            return fetch(tileUrl).then(function(r) {
-                if (!r.ok) throw new Error(r.status);
-                return r.blob();
-            }).then(function(blob) {
-                return createImageBitmap(blob);
-            }).then(function(img) {
-                // Calculate pixel position within tile
-                var n = Math.pow(2, DATA_TILE_ZOOM);
-                var latRad = latlng.lat * Math.PI / 180;
-                var xFloat = (latlng.lng + 180) / 360 * n;
-                var yFloat = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n;
-                var px = Math.floor((xFloat - tile.x) * img.width);
-                var py = Math.floor((yFloat - tile.y) * img.height);
-                px = Math.max(0, Math.min(px, img.width - 1));
-                py = Math.max(0, Math.min(py, img.height - 1));
-
-                var canvas = document.createElement('canvas');
-                canvas.width = img.width; canvas.height = img.height;
-                var ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0);
-                var pixel = ctx.getImageData(px, py, 1, 1).data;
-                // Pixel value stored in red channel
-                var val = pixel[0];
-                var label = EUNIS_LABELS[val];
-                if (!label || val === 0) return null;
-                // Parse label "X1 - Description" into parts
-                var parts = label.split(' - ');
-                var code = parts[0];
-                var name = parts.slice(1).join(' - ');
-                var l1code = code.charAt(0);
-                var l1map = {C:'C - inland surface waters',D:'D - mires, bogs and fens',
-                    E:'E - grasslands and lands dominated by forbs, mosses or lichens',
-                    F:'F - heathland, scrub and tundra',G:'G - woodland, forest and other wooded land',
-                    H:'H - inland unvegetated or sparsely vegetated habitats',
-                    I:'I - regularly or recently cultivated agricultural, horticultural and domestic habitats',
-                    J:'J - constructed, industrial and other artificial habitats',V:'V - marine habitats'};
-                return { results: [{ attributes: {
-                    'Raster.Label': label,
-                    'Raster.EUNIS': code,
-                    'Raster.EUNIS_L1': l1map[l1code] || ''
-                }}]};
             });
         }
 
@@ -631,12 +554,32 @@
             if (panelOpen) updateOfflineInfo();
         });
 
+        function tileBounds(x, y, z) {
+            var n = Math.pow(2, z);
+            var lng1 = x / n * 360 - 180;
+            var lng2 = (x + 1) / n * 360 - 180;
+            var lat1 = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 1) / n))) * 180 / Math.PI;
+            var lat2 = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) * 180 / Math.PI;
+            return [lng1, lat1, lng2, lat2];
+        }
+
+        var EUNIS_WMS_URL = 'https://bio.discomap.eea.europa.eu/arcgis/services/Ecosystem/EcosystemTypeMap_v3_1_Terrestrial/MapServer/WMSServer';
+
+        function eunisWmsTileUrl(x, y, z) {
+            var bb = tileBounds(x, y, z);
+            return EUNIS_WMS_URL + '?SERVICE=WMS&REQUEST=GetMap'
+                + '&LAYERS=0&STYLES=&FORMAT=image%2Fpng&TRANSPARENT=TRUE'
+                + '&VERSION=1.1.1&SRS=EPSG:4326'
+                + '&BBOX=' + bb.join(',')
+                + '&WIDTH=256&HEIGHT=256';
+        }
+
         function getAllUrls() {
             var sw = L.latLng(SK.south, SK.west);
             var ne = L.latLng(SK.north, SK.east);
             var sources = ['jprl', 'lestypy', 'geo'];
 
-            // Data tiles (z12) — vector JSON + EUNIS raster PNG
+            // Data tiles (z12)
             var tMin = latLngToTile(sw, DATA_TILE_ZOOM);
             var tMax = latLngToTile(ne, DATA_TILE_ZOOM);
             var dataUrls = [];
@@ -645,11 +588,10 @@
                     sources.forEach(function(s) {
                         dataUrls.push('./data/' + s + '/' + DATA_TILE_ZOOM + '/' + tx + '/' + ty + '.json');
                     });
-                    dataUrls.push('./data/eunis/' + DATA_TILE_ZOOM + '/' + tx + '/' + ty + '.png');
                 }
             }
 
-            // OSM base map tiles (z10–z14)
+            // OSM base map tiles (z10–z14) + EUNIS WMS tiles (z10–z12)
             var mapUrls = [];
             for (var z = 10; z <= 14; z++) {
                 var min = latLngToTile(sw, z);
@@ -658,6 +600,8 @@
                     for (var y = max.y; y <= min.y; y++) {
                         var sub = ['a','b','c'][(x + y) % 3];
                         mapUrls.push('https://' + sub + '.tile.openstreetmap.org/' + z + '/' + x + '/' + y + '.png');
+                        // Cache EUNIS WMS tiles at z10-z12 for offline visual overlay
+                        if (z <= 12) mapUrls.push(eunisWmsTileUrl(x, y, z));
                     }
                 }
             }

@@ -59,8 +59,8 @@ self.addEventListener('fetch', function(e) {
 
     if (url.indexOf('corsproxy.io') !== -1) return;
 
-    // Data tiles (GeoJSON + EUNIS PNG): cache-first
-    if (url.indexOf('/data/') !== -1 && (url.indexOf('.json') !== -1 || url.indexOf('.png') !== -1)) {
+    // Data tiles (GeoJSON): cache-first
+    if (url.indexOf('/data/') !== -1 && url.indexOf('.json') !== -1) {
         e.respondWith(
             caches.open(CACHE_DATA).then(function(cache) {
                 return cache.match(e.request).then(function(cached) {
@@ -144,5 +144,6 @@ function isTileRequest(url) {
         || url.indexOf('arcgisonline.com') !== -1
         || url.indexOf('WMSServer') !== -1
         || url.indexOf('WmsServer') !== -1
-        || url.indexOf('ags.geology.sk') !== -1;
+        || url.indexOf('ags.geology.sk') !== -1
+        || url.indexOf('discomap.eea.europa.eu') !== -1;
 }
