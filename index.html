@@ -196,8 +196,8 @@
         var layers = [
             { id: 'eunis', name: 'EUNIS habitats', group: 'habitat',
               layer: wms("https://bio.discomap.eea.europa.eu/arcgis/services/Ecosystem/EcosystemTypeMap_v3_1_Terrestrial/MapServer/WMSServer", eeaAttr, { layers: '0' }), on: false },
-            { id: 'jprl', name: 'Forest stands', group: 'forest',
-              layer: wms("https://gis.nlcsk.org/arcgis/services/MPRV/JPRL_ZBGIS/MapServer/WMSServer", nlcAttr, { layers: '0', version: '1.1.1' }), on: true },
+            { id: 'ltyp', name: 'Forest types', group: 'forest',
+              layer: wms("https://gis.nlcsk.org/arcgis/services/Inspire/LesneTypy/MapServer/WMSServer", nlcAttr, { layers: '0' }), on: true },
             { id: 'geo',  name: 'Geological map 1:50k', group: 'geology',
               layer: wms("https://ags.geology.sk/arcgis/services/WebServices/GM50/MapServer/WMSServer", geoAttr, { layers: '0', version: '1.1.1' }), on: false }
         ];
