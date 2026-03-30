@@ -550,13 +550,17 @@
             }
             if (!forestErr && data.jprl && data.jprl.results && data.jprl.results.length > 0) {
                 var aj = data.jprl.results[0].attributes;
-                var kl = findField(aj, ['KL', 'kl']);
+                var kl = findField(aj, ['KL', 'kl', 'Kategoria lesa', 'Kategoria_lesa']);
                 var cat = kl ? categoryLabels[kl] : null;
                 if (cat) { forestHtml += '<div><span class="category-tag ' + cat.cls + '">' + cat.text + '</span></div>'; hasForest = true; }
                 var vek = findField(aj, ['Vek_porastu', 'Vek porastu', 'VEK_PORASTU', 'vek_porastu', 'VekPor']);
                 if (vek) { forestHtml += '<div class="area">Age: ' + vek + ' years</div>'; hasForest = true; }
-                var area = findField(aj, ['Plocha', 'PLOCHA', 'plocha']);
-                if (area) forestHtml += '<div class="area">' + (parseFloat(area) / 10000).toFixed(2) + ' ha</div>';
+                var area = findField(aj, ['Plocha', 'PLOCHA', 'plocha', 'Vymera v m2', 'Vymera_v_m2']);
+                if (area) {
+                    var areaNum = parseFloat(area);
+                    if (areaNum > 1000) areaNum = areaNum / 10000; // m2 to ha
+                    forestHtml += '<div class="area">' + areaNum.toFixed(2) + ' ha</div>';
+                }
             }
             if (hasForest) {
                 html += '<div class="section"><div class="section-label">Forest</div>' + forestHtml;
