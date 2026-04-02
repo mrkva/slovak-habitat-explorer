@@ -97,6 +97,7 @@
         #offline-panel .secondary:active { background: #e5e7eb; }
         #offline-panel .danger { background: none; color: #999; font-size: 12px; font-weight: 400; padding: 6px; }
         #offline-panel .danger:active { color: #e11; }
+        #offline-panel .warn { font-size: 11px; color: #b45309; margin: 6px 0; padding: 6px 8px; background: #fef3c7; border-radius: 4px; }
         #offline-panel .bar-bg {
             background: #e5e7eb; border-radius: 4px; height: 8px; margin: 6px 0; overflow: hidden;
         }
@@ -642,12 +643,15 @@
         var SK = { south: 47.73, north: 49.61, west: 16.83, east: 22.57 };
 
         // Request persistent storage so browser won't evict cached data
+        var storagePersisted = false;
         if (navigator.storage && navigator.storage.persist) {
-            navigator.storage.persist();
+            navigator.storage.persist().then(function(granted) { storagePersisted = granted; });
         }
 
         function updateOfflineInfo() {
             var info = document.getElementById('offline-info');
+            var warn = document.getElementById('offline-warn');
+            if (warn) warn.remove();
             if (navigator.storage && navigator.storage.estimate) {
                 navigator.storage.estimate().then(function(est) {
                     var usedMB = (est.usage / 1048576).toFixed(0);
@@ -655,6 +659,12 @@
                         info.textContent = usedMB + ' MB saved for offline use';
                         offlineBtn.classList.add('ready');
                         offlineBtn.textContent = 'Offline (' + usedMB + ' MB)';
+                        if (!storagePersisted) {
+                            var w = document.createElement('div');
+                            w.className = 'warn'; w.id = 'offline-warn';
+                            w.textContent = 'Your browser may delete saved data under storage pressure. Re-download if data disappears.';
+                            info.parentNode.insertBefore(w, info.nextSibling);
+                        }
                     } else {
                         info.textContent = 'No data saved yet';
                         offlineBtn.classList.remove('ready');
@@ -741,21 +751,47 @@
 
             var total = urls.data.length + urls.map.length;
             var loaded = 0, failed = 0, bytes = 0;
+            var startTime = Date.now();
             function mb(b) { return (b / 1048576).toFixed(1); }
+
+            // Keep screen awake during download
+            var wakeLock = null;
+            if ('wakeLock' in navigator) {
+                navigator.wakeLock.request('screen').then(function(wl) { wakeLock = wl; }).catch(function() {});
+            }
+
+            function releaseWakeLock() {
+                if (wakeLock) { wakeLock.release(); wakeLock = null; }
+            }
 
             function updateProgress(phase) {
                 var done = loaded + failed;
                 var pct = Math.round(done / total * 100);
                 bar.style.width = pct + '%';
-                status.textContent = phase + ' ' + pct + '% — ' + mb(bytes) + ' MB';
+                var elapsed = (Date.now() - startTime) / 1000;
+                var rate = done / elapsed;
+                var eta = rate > 0 ? Math.round((total - done) / rate) : 0;
+                var etaText = eta > 60 ? Math.round(eta / 60) + ' min left' : eta + 's left';
+                status.textContent = phase + ' ' + pct + '% — ' + mb(bytes) + ' MB' + (pct < 100 ? ' — ' + etaText : '');
             }
 
-            // Phase 1: OSM map tiles
+            function downloadDone() {
+                releaseWakeLock();
+                status.textContent = 'Done! ' + mb(bytes) + ' MB saved';
+                bar.style.width = '100%';
+                setTimeout(function() {
+                    progress.style.display = 'none';
+                    actions.style.display = 'flex';
+                    updateOfflineInfo();
+                }, 3000);
+            }
+
+            // Phase 1: map tiles (12 parallel)
             caches.open('habitat-tiles-v3').then(function(tileCache) {
                 var mq = urls.map.slice();
                 function nextMap() {
                     if (mq.length === 0) return downloadData();
-                    var chunk = mq.splice(0, 6);
+                    var chunk = mq.splice(0, 12);
                     return Promise.all(chunk.map(function(u) {
                         return tileCache.match(u).then(function(cached) {
                             if (cached) { loaded++; return; }
@@ -773,22 +809,13 @@
                 return nextMap();
             });
 
-            // Phase 2: data tiles
+            // Phase 2: data tiles (12 parallel)
             function downloadData() {
                 return caches.open('habitat-data-v3').then(function(cache) {
                     var dq = urls.data.slice();
                     function nextData() {
-                        if (dq.length === 0) {
-                            status.textContent = 'Done! ' + mb(bytes) + ' MB saved';
-                            bar.style.width = '100%';
-                            setTimeout(function() {
-                                progress.style.display = 'none';
-                                actions.style.display = 'flex';
-                                updateOfflineInfo();
-                            }, 3000);
-                            return;
-                        }
-                        var chunk = dq.splice(0, 8);
+                        if (dq.length === 0) return downloadDone();
+                        var chunk = dq.splice(0, 12);
                         return Promise.all(chunk.map(function(u) {
                             return cache.match(u).then(function(cached) {
                                 if (cached) { loaded++; return; }
